@@ -1,0 +1,11 @@
+name: "customer360"
+version: "1.0.0"
+config-version: 2
+
+profile: "analytics_postgres"
+
+model-paths: [ "models" ]
+
+models:
+  customer360:
+    +materialized: view

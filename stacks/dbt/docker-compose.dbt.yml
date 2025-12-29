@@ -1,0 +1,18 @@
+services:
+  dbt:
+    build: .
+    container_name: dbt
+    working_dir: /usr/app
+    volumes:
+      - ./project:/usr/app          # your dbt project
+      - ./profiles:/root/.dbt       # profiles.yml mounted here
+    environment:
+      DBT_TARGET: dev
+      # pass through your Postgres password so dbt can use env_var
+      ANALYTICS_DB_PASSWORD: ${ANALYTICS_DB_PASSWORD}
+    networks:
+      - core_data_net
+
+networks:
+  core_data_net:
+    external: true

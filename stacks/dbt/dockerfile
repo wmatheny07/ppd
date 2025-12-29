@@ -1,0 +1,19 @@
+FROM python:3.11-slim
+
+# Install system deps (psycopg2, etc.)
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libpq-dev \
+    git \
+  && rm -rf /var/lib/apt/lists/*
+
+# Install dbt-core + Postgres adapter
+RUN pip install --no-cache-dir \
+    dbt-core \
+    dbt-postgres
+
+# Default working dir – where we'll mount the dbt project
+WORKDIR /usr/app
+
+ENTRYPOINT ["dbt"]
+CMD ["debug"]

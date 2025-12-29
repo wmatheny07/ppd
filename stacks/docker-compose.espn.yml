@@ -1,0 +1,77 @@
+services:
+  espn-web:
+    build:
+      context: /opt/ppd/apps/Public-ESPN-API/espn_service
+      target: production
+    container_name: espn-web
+    ports:
+      - "${ESPN_API_PORT:-18090}:8000"
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings.local
+
+      # Use your existing Postgres (same host your stack uses on core_data_net)
+      # NOTE: repo uses "postgres://" but modern libs prefer "postgresql://"
+      - DATABASE_URL=postgresql://${ANALYTICS_DB_USER}:${ANALYTICS_DB_PASSWORD}@${ANALYTICS_DB_HOST:-postgres}:${ANALYTICS_DB_PORT:-5432}/${ESPN_DB_NAME:-espn}
+
+      # Use your existing Redis (airflow-redis)
+      - CELERY_BROKER_URL=redis://airflow-redis:6379/${ESPN_REDIS_DB:-2}
+      - CELERY_RESULT_BACKEND=redis://airflow-redis:6379/${ESPN_REDIS_DB:-2}
+
+      # App settings
+      - SECRET_KEY=${ESPN_SECRET_KEY:-dev-secret-key-change-in-production}
+      - DEBUG=${ESPN_DEBUG:-True}
+      - ALLOWED_HOSTS=${ESPN_ALLOWED_HOSTS:-localhost,127.0.0.1,0.0.0.0}
+
+    # No depends_on healthchecks since postgres/redis are external to this compose
+    networks:
+      - core_data_net
+
+    # In dev, keep the bind mount; in prod you may want to remove it
+    volumes:
+      - /opt/ppd/apps/Public-ESPN-API/espn_service:/app
+
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py runserver 0.0.0.0:8000"
+
+  espn-celery:
+    build:
+      context: /opt/ppd/apps/Public-ESPN-API/espn_service
+      target: production
+    container_name: espn-celery
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings.local
+      - DATABASE_URL=postgresql://${ANALYTICS_DB_USER}:${ANALYTICS_DB_PASSWORD}@${ANALYTICS_DB_HOST:-postgres}:${ANALYTICS_DB_PORT:-5432}/${ESPN_DB_NAME:-espn}
+      - CELERY_BROKER_URL=redis://airflow-redis:6379/${ESPN_REDIS_DB:-2}
+      - CELERY_RESULT_BACKEND=redis://airflow-redis:6379/${ESPN_REDIS_DB:-2}
+      - SECRET_KEY=${ESPN_SECRET_KEY:-dev-secret-key-change-in-production}
+      - DEBUG=${ESPN_DEBUG:-True}
+    networks:
+      - core_data_net
+    volumes:
+      - /opt/ppd/apps/Public-ESPN-API/espn_service:/app
+    command: celery -A config worker -l INFO
+
+  espn-celery-beat:
+    build:
+      context: /opt/ppd/apps/Public-ESPN-API/espn_service
+      target: production
+    container_name: espn-celery-beat
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings.local
+      - DATABASE_URL=postgresql://${ANALYTICS_DB_USER}:${ANALYTICS_DB_PASSWORD}@${ANALYTICS_DB_HOST:-postgres}:${ANALYTICS_DB_PORT:-5432}/${ESPN_DB_NAME:-espn}
+      - CELERY_BROKER_URL=redis://airflow-redis:6379/${ESPN_REDIS_DB:-2}
+      - CELERY_RESULT_BACKEND=redis://airflow-redis:6379/${ESPN_REDIS_DB:-2}
+      - SECRET_KEY=${ESPN_SECRET_KEY:-dev-secret-key-change-in-production}
+      - DEBUG=${ESPN_DEBUG:-True}
+    depends_on:
+      - espn-celery
+    networks:
+      - core_data_net
+    volumes:
+      - /opt/ppd/apps/Public-ESPN-API/espn_service:/app
+    command: celery -A config beat -l INFO
+
+networks:
+  core_data_net:
+    external: true

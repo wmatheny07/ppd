@@ -1,0 +1,42 @@
+FROM apache/airflow:2.10.2-python3.11
+
+# 1) System packages as root
+USER root
+
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libpq-dev \
+    git \
+  && rm -rf /var/lib/apt/lists/*
+
+# 2) Python packages as 'airflow' user (required by Airflow image)
+USER airflow
+
+FROM apache/airflow:2.10.2-python3.11
+
+USER root
+
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libpq-dev \
+    git \
+    curl \
+    netcat-openbsd \
+  && rm -rf /var/lib/apt/lists/*
+
+USER airflow
+
+RUN pip install --no-cache-dir \
+    dbt-core \
+    dbt-postgres \
+    great-expectations \
+    mlflow \
+    pandas \
+    scikit-learn \
+    psycopg2-binary \
+    sqlalchemy \
+    requests \
+    beautifulsoup4 \
+    lxml
+
+WORKDIR /opt/airflow

@@ -1,0 +1,41 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# node
+**/node_modules/
+**/dist/
+
+# python
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+
+# airflow runtime
+stacks/airflow/airflow/logs/
+stacks/airflow/airflow/postgres-data/
+stacks/airflow/airflow/*.pid
+
+# dbt
+**/target/
+**/logs/
+**/dbt_packages/
+
+# misc
+.DS_Store
+.vscode/
+.idea/
+
+# data
+*.csv
+
+# Superset
+**/site-packages/
+**/superset.db
+**/superset.db-journal
+**/superset_home/*.log
+**/superset_home/.cache/
+**/.cache/

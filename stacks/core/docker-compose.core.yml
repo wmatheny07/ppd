@@ -1,0 +1,162 @@
+networks:
+  core_data_net:
+    external: true
+
+volumes:
+  postgres_data:
+  minio_data:
+  metabase_data:
+  mlflow_data:
+  qdrant_data:
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: postgres
+    environment:
+      POSTGRES_USER: analytics
+      POSTGRES_PASSWORD: ${ANALYTICS_DB_PASSWORD}
+      POSTGRES_DB: analytics
+    command:
+      - "postgres"
+      - "-c"
+      - "wal_level=logical"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    networks:
+      - core_data_net
+
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_data:/data
+    networks:
+      - core_data_net
+
+  metabase:
+    image: metabase/metabase:latest
+    container_name: metabase
+    environment:
+      MB_DB_TYPE: postgres
+      MB_DB_DBNAME: metabase
+      MB_DB_PORT: 5432
+      MB_DB_USER: analytics
+      MB_DB_PASS: ${ANALYTICS_DB_PASSWORD}
+      MB_DB_HOST: postgres
+    depends_on:
+      - postgres
+    volumes:
+      - metabase_data:/metabase-data
+    networks:
+      - core_data_net
+
+  superset:
+    build:
+      context: .
+      dockerfile: dockerfile.superset
+    image: superset-with-pg:latest
+    container_name: superset
+    environment:
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+      SUPERSET_LOAD_EXAMPLES: "no"
+      # (Optional - later) Use Postgres instead of SQLite:
+      SQLALCHEMY_DATABASE_URI: postgresql+psycopg2://analytics:${ANALYTICS_DB_PASSWORD}@postgres:5432/superset
+      ENABLE_PROXY_FIX: "true"
+      SUPERSET_WEBSERVER_BASEURL: "https://superset.peakprecisiondata.com"
+    volumes:
+      - ./superset_home:/app/superset_home
+    depends_on:
+      - postgres
+    networks:
+      - core_data_net
+    # IMPORTANT: no custom 'command:' here for now
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:latest
+    container_name: mlflow
+    command: >
+      mlflow server
+      --backend-store-uri sqlite:///mlflow.db
+      --default-artifact-root /mlflow/artifacts
+      --host 0.0.0.0
+      --port 5000
+    volumes:
+      - mlflow_data:/mlflow
+    networks:
+      - core_data_net
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant
+    ports:
+      - "6333:6333"   # REST
+      - "6334:6334"   # gRPC
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - core_data_net
+
+  jupyter-gpu:
+    build:
+      context: .
+      dockerfile: dockerfile.jupyter
+    image: jupyter-gpu:local
+    container_name: jupyter-gpu
+    volumes:
+      - ./notebooks:/workspace
+    working_dir: /workspace
+    ports:
+      - "8889:8888"
+    restart: unless-stopped
+    networks:
+      - core_data_net
+    gpus: all
+    command: >
+      bash -lc "pip install --no-cache-dir jupyterlab mlflow qdrant-client transformers sentence-transformers scikit-learn xgboost tensorflow &&
+      jupyter lab
+      --ServerApp.ip=0.0.0.0
+      --ServerApp.port=8888
+      --ServerApp.allow_remote_access=True
+      --ServerApp.open_browser=False
+      --ServerApp.token=''
+      --ServerApp.trust_xheaders=True
+      --allow-root"
+  
+  dk-ingest:
+    image: python:3.11-slim
+    container_name: dk-ingest
+    depends_on:
+      - postgres
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: analytics
+      DB_USER: analytics
+      DB_PASSWORD: ${ANALYTICS_DB_PASSWORD}
+      DK_INBOX: /data/inbox
+      DK_ARCHIVE: /data/archive
+      DK_ERROR: /data/error
+      DK_RUN_ONCE: "false"
+      DK_POLL_SECONDS: "60"
+      DK_SCHEMA: nfl_dfs
+    volumes:
+      - /opt/ppd/data/inbox/dk:/data/inbox
+      - /opt/ppd/data/archive/dk:/data/archive
+      - /opt/ppd/data/error/dk:/data/error
+      - /opt/ppd/stacks/airflow/airflow/jobs/dk:/app
+    working_dir: /app
+    command: >
+      bash -lc "pip install --no-cache-dir pandas sqlalchemy psycopg2-binary &&
+                python -u dk_ingest.py"
+    networks:
+      - core_data_net
+    restart: unless-stopped
+  # GPU: see note
