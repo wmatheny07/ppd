@@ -1,14 +1,12 @@
-analytics_postgres:
-  target: dev
+analytics:
+  target: prod
   outputs:
-    dev:
+    prod:
       type: postgres
-      host: postgres # service name from your core compose
+      host: postgres
       user: analytics
       password: "{{ env_var('ANALYTICS_DB_PASSWORD') }}"
       port: 5432
       dbname: analytics
-      schema: analytics # default schema for your models
+      schema: analytics
       threads: 4
-      connect_timeout: 10
-      sslmode: disable

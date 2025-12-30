@@ -1,0 +1,12 @@
+version: 2
+
+sources:
+  - name: espn_raw
+    schema: espn_raw              # FDW schema in analytics DB
+    tables:
+      - name: espn_play
+      - name: espn_play_participant_stat
+      - name: espn_play_team_stat
+      - name: espn_event
+      - name: espn_team
+      - name: espn_athlete

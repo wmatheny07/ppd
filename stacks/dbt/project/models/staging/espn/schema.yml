@@ -1,0 +1,43 @@
+version: 2
+
+models:
+  - name: stg_espn_play
+    columns:
+      - name: play_espn_id
+        tests: [not_null, unique]
+      - name: event_id
+        tests: [not_null]
+      - name: competition_id
+        tests: [not_null]
+
+  - name: stg_espn_play_participant_stat
+    columns:
+      - name: participant_stat_pk
+        tests: [not_null, unique]
+      - name: play_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_espn_play')
+              field: play_pk
+      - name: athlete_espn_id
+        tests: [not_null]
+
+  - name: stg_espn_play_team_stat
+    columns:
+      - name: team_stat_pk
+        tests: [not_null, unique]
+      - name: play_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_espn_play')
+              field: play_pk
+      - name: team_espn_id
+        tests: [not_null]
+      - name: team_type
+        tests:
+          - accepted_values:
+              values: ["offense", "defense"]
+              quote: true
+              severity: warn
