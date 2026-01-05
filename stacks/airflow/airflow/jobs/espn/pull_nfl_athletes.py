@@ -8,6 +8,7 @@ from datetime import datetime
 
 import requests
 import psycopg2
+from sqlalchemy import create_engine, text
 from psycopg2.extras import execute_batch
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -32,9 +33,22 @@ def session_with_retries():
     )
     return s
 
+def get_engine() -> "sqlalchemy.Engine":
+    """
+    Prefers explicit DB_* env vars.
+    (You can keep your Airflow-conn approach too, but env is simplest for BashOperator.)
+    """
+    host = os.getenv("ESPN_DB_HOST", "").strip()
+    port = os.getenv("ESPN_DB_PORT", "5432").strip()
+    db = os.getenv("ESPN_DB_NAME", "").strip()
+    user = os.getenv("ESPN_DB_USER", "").strip()
+    pwd = os.getenv("ESPN_DB_PASSWORD", "").strip()
 
-def pg_conn():
-    return psycopg2.connect(os.environ["DATABASE_URL"])
+    if not all([host, db, user, pwd]):
+        raise RuntimeError("Missing DB env vars (DB_HOST/DB_NAME/DB_USER/DB_PASSWORD).")
+
+    url = f"postgresql+psycopg2://{user}:{pwd}@{host}:{port}/{db}"
+    return create_engine(url,execution_options={"stream_results": True})
 
 
 def athletes_index_url(season: int, page: int):
@@ -120,63 +134,66 @@ def main():
     ap.add_argument("--season", type=int, required=True)
     ap.add_argument("--sleep", type=float, default=0.1)
     args = ap.parse_args()
+    engine = get_engine()
 
     session = session_with_retries()
     page = 1
     processed = 0
 
-    with pg_conn() as conn, conn.cursor() as cur:
-        while True:
-            index = get_json(session, athletes_index_url(args.season, page))
-            items = index.get("items", [])
-            if not items:
-                break
+    BATCH_SIZE = 250  # tune
 
-            for it in items:
-                ref = it.get("$ref")
-                if not ref:
-                    continue
+    with engine.begin() as conn:
+        raw = conn.connection
+        with raw.cursor() as cur:
+            while True:
+                index = get_json(session, athletes_index_url(args.season, page))
+                items = index.get("items", [])
+                if not items:
+                    print(f"✅ No more items; stopping at page={page}")
+                    break
 
-                athlete = get_json(session, ref)
+                batch = []
+                for it in items:
+                    ref = it.get("$ref")
+                    if not ref:
+                        continue
+                    athlete = get_json(session, ref)
 
-                record = {
-                    "espn_id": str(athlete.get("id")),
-                    "uid": athlete.get("uid", ""),
-                    "first_name": athlete.get("firstName", ""),
-                    "last_name": athlete.get("lastName", ""),
-                    "full_name": athlete.get("fullName", ""),
-                    "display_name": athlete.get("displayName", ""),
-                    "short_name": athlete.get("shortName", ""),
-                    "position": athlete.get("position", {}).get("name", ""),
-                    "position_abbreviation": athlete.get("position", {}).get("abbreviation", ""),
-                    "jersey": str(athlete.get("jersey", "")),
-                    "is_active": bool(athlete.get("active", True)),
-                    "height": athlete.get("displayHeight", ""),
-                    "weight": athlete.get("weight"),
-                    "age": athlete.get("age"),
-                    "birth_date": athlete.get("dateOfBirth"),
-                    "birth_place": ", ".join(
-                        filter(
-                            None,
-                            [
-                                athlete.get("birthPlace", {}).get("city"),
-                                athlete.get("birthPlace", {}).get("state"),
-                                athlete.get("birthPlace", {}).get("country"),
-                            ],
-                        )
-                    ),
-                    "headshot": athlete.get("headshot", {}).get("href", ""),
-                    "links": json.dumps(athlete.get("links", [])),
-                    "raw_data": json.dumps(athlete),
-                }
+                    batch.append({
+                        "espn_id": str(athlete.get("id")),
+                        "uid": athlete.get("uid", ""),
+                        "first_name": athlete.get("firstName", ""),
+                        "last_name": athlete.get("lastName", ""),
+                        "full_name": athlete.get("fullName", ""),
+                        "display_name": athlete.get("displayName", ""),
+                        "short_name": athlete.get("shortName", ""),
+                        "position": (athlete.get("position") or {}).get("name", ""),
+                        "position_abbreviation": (athlete.get("position") or {}).get("abbreviation", ""),
+                        "jersey": str(athlete.get("jersey", "")),
+                        "is_active": bool(athlete.get("active", True)),
+                        "height": athlete.get("displayHeight", ""),
+                        "weight": athlete.get("weight"),
+                        "age": athlete.get("age"),
+                        "birth_date": athlete.get("dateOfBirth"),
+                        "birth_place": ", ".join(
+                            filter(None, [
+                                (athlete.get("birthPlace") or {}).get("city"),
+                                (athlete.get("birthPlace") or {}).get("state"),
+                                (athlete.get("birthPlace") or {}).get("country"),
+                            ])
+                        ),
+                        "headshot": (athlete.get("headshot") or {}).get("href", ""),
+                        "links": json.dumps(athlete.get("links", [])),
+                        "raw_data": json.dumps(athlete),
+                    })
 
-                cur.execute(UPSERT_SQL, record)
-                processed += 1
-                time.sleep(args.sleep)
+                    if args.sleep:
+                        time.sleep(args.sleep)
 
-            conn.commit()
-            print(f"📦 Page {page} complete ({processed} athletes)")
-            page += 1
+                execute_batch(cur, UPSERT_SQL, batch, page_size=BATCH_SIZE)
+                processed += len(batch)
+                print(f"📦 Page {page} upserted={len(batch)} processed_total={processed}")
+                page += 1
 
     print(f"✅ Finished athletes ingest: {processed}")
     return 0

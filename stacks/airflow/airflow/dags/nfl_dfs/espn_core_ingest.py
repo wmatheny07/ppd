@@ -33,13 +33,11 @@ with DAG(
             task_id="pull_events",
             bash_command="""
             set -euo pipefail
-            python3 /opt/airflow/jobs/espn/pull_nfl_events_2025.py \
+            python3 /opt/airflow/jobs/espn/pull_nfl_events.py \
               --season {{ var.value.get('ESPN_SEASON', '2025') }} \
-              --season-type {{ var.value.get('ESPN_SEASON_TYPE', '2') }} \
               --week-start {{ var.value.get('ESPN_WEEK_START', '1') }} \
               --week-end {{ var.value.get('ESPN_WEEK_END', '18') }}
             """,
-            env={"DATABASE_URL": "{{ var.value.get('ESPN_DATABASE_URL', '') }}"},
             append_env=True,
         )
 
@@ -47,10 +45,9 @@ with DAG(
             task_id="pull_athletes",
             bash_command="""
             set -euo pipefail
-            python3 /opt/airflow/jobs/espn/pull_nfl_athletes_2025.py \
-              --season {{ var.value.get('ESPN_SEASON', '2025') }}
+            python3 -u /opt/airflow/jobs/espn/pull_nfl_athletes.py \
+            --season {{ var.value.get('ESPN_SEASON', '2025') }}
             """,
-            env={"DATABASE_URL": "{{ var.value.get('ESPN_DATABASE_URL', '') }}"},
             append_env=True,
         )
 
@@ -58,11 +55,19 @@ with DAG(
             task_id="pull_play_by_play",
             bash_command="""
             set -euo pipefail
-            python3 /opt/airflow/jobs/espn/pull_nfl_play_by_play_2025.py \
-              --season {{ var.value.get('ESPN_SEASON', '2025') }} \
-              --season-type {{ var.value.get('ESPN_SEASON_TYPE', '2') }}
+
+            python3 /opt/airflow/jobs/espn/pull_nfl_pbp.py \
+            --events-sql "
+                select espn_id
+                from public.espn_event
+                where season_year = {{ var.value.get('ESPN_SEASON', '2025') }}
+                and season_type = {{ var.value.get('ESPN_SEASON_TYPE', '2') }}
+                and week between {{ var.value.get('ESPN_WEEK_START', '1') }} and {{ var.value.get('ESPN_WEEK_END', '18') }}
+                order by week, espn_id
+            " \
+            --play-batch-size 250 \
+            --participant-batch-size 2000
             """,
-            env={"DATABASE_URL": "{{ var.value.get('ESPN_DATABASE_URL', '') }}},
             append_env=True,
         )
 

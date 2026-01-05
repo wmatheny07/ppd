@@ -1,13 +1,13 @@
-CREATE TABLE public.espn_play_stat (
+CREATE TABLE espn.espn_play_stat (
   id bigserial PRIMARY KEY,
   created_at timestamptz NOT NULL DEFAULT now(),
 
-  play_id bigint NOT NULL REFERENCES public.espn_play(id) ON DELETE CASCADE,
+  play_id bigint NOT NULL REFERENCES espn.espn_play(id) ON DELETE CASCADE,
 
   scope varchar(20) NOT NULL,          -- 'participant' or 'team'
 
-  athlete_id bigint NULL REFERENCES public.espn_athlete(id),
-  team_id bigint NULL REFERENCES public.espn_team(id),
+  athlete_id bigint NULL REFERENCES espn.espn_athlete(id),
+  team_id bigint NULL REFERENCES espn.espn_team(id),
 
   -- normalized non-null keys for uniqueness (avoid COALESCE in constraint)
   athlete_id_norm bigint NOT NULL DEFAULT 0,
@@ -25,6 +25,6 @@ CREATE TABLE public.espn_play_stat (
     UNIQUE (play_id, scope, athlete_id_norm, team_id_norm, stat_key)
 );
 
-CREATE INDEX espn_play_stat_play_idx ON public.espn_play_stat(play_id);
-CREATE INDEX espn_play_stat_athlete_idx ON public.espn_play_stat(athlete_id);
-CREATE INDEX espn_play_stat_team_idx ON public.espn_play_stat(team_id);
+CREATE INDEX espn_play_stat_play_idx ON espn.espn_play_stat(play_id);
+CREATE INDEX espn_play_stat_athlete_idx ON espn.espn_play_stat(athlete_id);
+CREATE INDEX espn_play_stat_team_idx ON espn.espn_play_stat(team_id);

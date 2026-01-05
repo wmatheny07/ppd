@@ -1,4 +1,4 @@
-CREATE TABLE public.espn_play (
+CREATE TABLE espn.espn_play (
   id bigserial PRIMARY KEY,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
@@ -45,6 +45,6 @@ CREATE TABLE public.espn_play (
   raw_data jsonb NOT NULL
 );
 
-CREATE INDEX espn_play_event_idx ON public.espn_play(event_espn_id);
-CREATE INDEX espn_play_team_idx ON public.espn_play(team_id);
-CREATE INDEX espn_play_offdef_idx ON public.espn_play(offense_team_id, defense_team_id);
+CREATE INDEX espn_play_event_idx ON espn.espn_play(event_espn_id);
+CREATE INDEX espn_play_team_idx ON espn.espn_play(team_id);
+CREATE INDEX espn_play_offdef_idx ON espn.espn_play(offense_team_id, defense_team_id);

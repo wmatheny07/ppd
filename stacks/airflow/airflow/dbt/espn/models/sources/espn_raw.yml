@@ -1,0 +1,22 @@
+version: 2
+
+sources:
+- name: espn
+  schema: espn
+  description: "Raw ESPN ingestion tables"
+
+  tables:
+  - name: espn_play
+    description: "Play-by-play data from ESPN Core API"
+
+  - name: espn_play_participant
+    description: "Participants (athletes/teams) involved in each play"
+
+  - name: espn_event
+    description: "Games / events metadata"
+
+  - name: espn_team
+    description: "Teams from ESPN reference data"
+
+  - name: espn_athlete
+    description: "Athletes from ESPN reference data"

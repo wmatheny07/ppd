@@ -23,6 +23,8 @@ stacks/airflow/airflow/*.pid
 **/target/
 **/logs/
 **/dbt_packages/
+**/dbt-adapters/
+**/dbt_internal_packages/
 
 # misc
 .DS_Store

@@ -14,8 +14,9 @@ DEFAULT_ARGS = {
 
 ESPN_INGESTED = Dataset("dataset://espn/ingested")
 DFS_INGESTED = Dataset("dataset://dfs/ingested")
-
-DBT_DIR = "/opt/airflow/stacks/dbt/project"  # <-- adjust
+DBT_PROFILES_DIR = "/opt/airflow/.dbt"
+DBT_PROJECT_DIR  = "/opt/airflow/dbt/espn"
+DBT_ARTIFACTS_DIR = "/opt/airflow/dbt_artifacts"
 
 with DAG(
     dag_id="dbt_refresh_analytics",
@@ -28,14 +29,28 @@ with DAG(
     tags=["dbt"],
 ) as dag:
 
+    COMMON_ENV = {
+        "ANALYTICS_DB_PASSWORD": "{{ var.value.ANALYTICS_DB_PASSWORD }}",
+        # Add any other env vars referenced by profiles.yml
+    }
+
     dbt_deps = BashOperator(
         task_id="dbt_deps",
         bash_command=f"""
         set -euo pipefail
-        cd {DBT_DIR}
-        dbt deps --profiles-dir /opt/airflow/.dbt
+        cd {DBT_PROJECT_DIR}
+
+        mkdir -p {DBT_ARTIFACTS_DIR}/dbt_packages {DBT_ARTIFACTS_DIR}/logs {DBT_ARTIFACTS_DIR}/target
+
+        if [ -f packages.yml ]; then
+        dbt deps \
+            --profiles-dir {DBT_PROFILES_DIR} \
+            --packages-install-path {DBT_ARTIFACTS_DIR}/dbt_packages
+        else
+        echo "No packages.yml; skipping dbt deps"
+        fi
         """,
-        env={"ANALYTICS_DB_PASSWORD": "{{ var.value.ANALYTICS_DB_PASSWORD }}"},
+        env=COMMON_ENV,
         append_env=True,
     )
 
@@ -43,10 +58,20 @@ with DAG(
         task_id="dbt_build",
         bash_command=f"""
         set -euo pipefail
-        cd {DBT_DIR}
-        dbt build --profiles-dir /opt/airflow/.dbt --select "marts.espn+ marts.dfs+"
+        echo "Using profiles dir: {DBT_PROFILES_DIR}"
+        ls -la {DBT_PROFILES_DIR}
+        cd {DBT_PROJECT_DIR}
+
+        mkdir -p {DBT_ARTIFACTS_DIR}/logs {DBT_ARTIFACTS_DIR}/target
+        test -w {DBT_ARTIFACTS_DIR} || (echo "Artifacts dir not writable" && exit 2)
+
+        dbt build \
+        --profiles-dir {DBT_PROFILES_DIR} \
+        --target-path {DBT_ARTIFACTS_DIR}/target \
+        --log-path {DBT_ARTIFACTS_DIR}/logs \
+        --select "marts.espn+ marts.dfs+"
         """,
-        env={"ANALYTICS_DB_PASSWORD": "{{ var.value.ANALYTICS_DB_PASSWORD }}"},
+        env=COMMON_ENV,
         append_env=True,
     )
 

@@ -1,0 +1,70 @@
+name: espn_analytics
+version: "1.0.0"
+config-version: 2
+
+# This MUST match profiles.yml
+profile: analytics
+
+# Where dbt should look for things
+model-paths: [ "models" ]
+analysis-paths: [ "analysis" ]
+test-paths: [ "tests" ]
+seed-paths: [ "seeds" ]
+macro-paths: [ "macros" ]
+snapshot-paths: [ "snapshots" ]
+
+# Where dbt puts compiled artifacts
+target-path: "target"
+clean-targets:
+- "target"
+- "dbt_packages"
+
+# Default model behavior
+models:
+  espn_analytics:
+
+    # -------------------------------
+    # STAGING MODELS (raw ESPN data)
+    # -------------------------------
+    staging:
+      +schema: staging
+      +materialized: view
+      +tags: [ "staging", "espn" ]
+
+    # --------------------------------
+    # INTERMEDIATE / TRANSFORM MODELS
+    # --------------------------------
+    intermediate:
+      +schema: intermediate
+      +materialized: view
+      +tags: [ "intermediate", "espn" ]
+
+    # --------------------------------
+    # MARTS / ANALYTICS MODELS
+    # --------------------------------
+    marts:
+      +schema: marts
+      +materialized: table
+      +tags: [ "marts", "analytics" ]
+
+    # --------------------------------
+    # DFS-SPECIFIC MODELS (optional)
+    # --------------------------------
+    dfs:
+      +schema: dfs
+      +materialized: table
+      +tags: [ "dfs" ]
+
+# Seeds (optional)
+seeds:
+  espn_analytics:
+    +schema: seeds
+
+# Snapshots (optional, future-proofing)
+snapshots:
+  espn_analytics:
+    +schema: snapshots
+
+# On-run hooks (optional, but useful)
+on-run-start:
+- "set search_path to analytics,public"

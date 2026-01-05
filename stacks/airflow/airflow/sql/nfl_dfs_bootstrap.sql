@@ -52,3 +52,44 @@ CREATE TABLE IF NOT EXISTS nfl_dfs.depth_chart_current (
 
 CREATE INDEX IF NOT EXISTS depth_chart_current_join_idx
 ON nfl_dfs.depth_chart_current (slate_date, team_abbrev, player_name_norm);
+
+CREATE TABLE IF NOT EXISTS nfl_dfs.active_player_pool (
+    id BIGSERIAL PRIMARY KEY,
+
+    -- identity
+    athlete_id        VARCHAR(50) NOT NULL,
+    athlete_espn_id   VARCHAR(50) NOT NULL,
+    full_name         TEXT NOT NULL,
+
+    -- team / position
+    team_id           BIGINT NULL,
+    team_espn_id      VARCHAR(50),
+    team_abbr         VARCHAR(10),
+    position          VARCHAR(10) NOT NULL,
+    position_group    VARCHAR(20),   -- QB / RB / WR / TE / DST
+
+    -- slate context
+    season            INTEGER NOT NULL,
+    season_type       INTEGER NOT NULL, -- 1=pre, 2=reg, 3=post
+    week              INTEGER NOT NULL,
+
+    -- availability / status
+    is_active         BOOLEAN NOT NULL DEFAULT TRUE,
+    is_starter        BOOLEAN DEFAULT FALSE,
+    depth_chart_rank  INTEGER,
+    injury_status     VARCHAR(50),     -- OUT / DOUBTFUL / QUESTIONABLE
+    practice_status   VARCHAR(50),
+
+    -- DFS eligibility helpers
+    eligible_dfs      BOOLEAN NOT NULL DEFAULT TRUE,
+    salary_floor      INTEGER,          -- optional (min seen salary)
+    salary_ceiling    INTEGER,          -- optional (max seen salary)
+
+    -- metadata
+    source            VARCHAR(50) DEFAULT 'espn',
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    -- uniqueness: one row per player per slate
+    UNIQUE (athlete_espn_id, season, season_type, week)
+);

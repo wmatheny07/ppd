@@ -7,6 +7,10 @@ import time
 from datetime import datetime
 from typing import Any, Dict, Iterable, Optional, Tuple
 from urllib.parse import urlencode, urlparse, parse_qs, urlunparse
+from sqlalchemy import create_engine, text
+from psycopg2.extras import execute_batch  # already imported in your other scripts
+# optional:
+from psycopg2.extras import execute_values
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -64,17 +68,31 @@ def get_json(s: requests.Session, url: str, timeout: int = 30) -> Dict[str, Any]
 # -----------------------
 # DB helpers
 # -----------------------
-def pg_conn():
-    db_url = os.getenv("DATABASE_URL")
-    if db_url:
-        return psycopg2.connect(db_url)
-    return psycopg2.connect(
-        host=os.getenv("PGHOST", "localhost"),
-        port=int(os.getenv("PGPORT", "5432")),
-        dbname=os.getenv("PGDATABASE", "espn"),
-        user=os.getenv("PGUSER", "analytics"),
-        password=os.getenv("ANALYTICS_PASSWORD", ""),
-    )
+def get_engine() -> "sqlalchemy.Engine":
+    """
+    Prefers explicit DB_* env vars.
+    (You can keep your Airflow-conn approach too, but env is simplest for BashOperator.)
+    """
+    host = os.getenv("ESPN_DB_HOST", "").strip()
+    port = os.getenv("ESPN_DB_PORT", "5432").strip()
+    db = os.getenv("ESPN_DB_NAME", "").strip()
+    user = os.getenv("ESPN_DB_USER", "").strip()
+    pwd = os.getenv("ESPN_DB_PASSWORD", "").strip()
+
+    if not all([host, db, user, pwd]):
+        raise RuntimeError("Missing DB env vars (DB_HOST/DB_NAME/DB_USER/DB_PASSWORD).")
+
+    url = f"postgresql+psycopg2://{user}:{pwd}@{host}:{port}/{db}"
+    return create_engine(url,execution_options={"stream_results": True})
+
+def to_bool(v):
+    if v is None: return None
+    if isinstance(v, bool): return v
+    if isinstance(v, (int, float)): return bool(v)
+    s = str(v).strip().lower()
+    if s in ("true","t","1","yes","y"): return True
+    if s in ("false","f","0","no","n"): return False
+    return None
 
 def parse_ts(v: Optional[str]) -> Optional[datetime]:
     if not v:
@@ -118,6 +136,33 @@ def iter_play_refs(session: requests.Session, url: str) -> Iterable[str]:
             break
         page += 1
 
+def stat_type_from_ref(sref: str) -> str | None:
+    m = re.search(r"/(statistics|playStatistics)/(\d+)(?:/|\?|$)", sref)
+    return m.group(2) if m else None
+
+def slim_payload(payload: dict, sref: str, ref_key: str) -> dict:
+    splits = payload.get("splits") or {}
+    cats = splits.get("categories") or []
+    return {
+        "ref": sref,
+        "ref_key": ref_key,                 # "statistics" vs "playStatistics"
+        "splits_id": splits.get("id"),
+        "categories": [
+            {
+                "name": c.get("name"),
+                "stats": [
+                    {
+                        "name": st.get("name"),
+                        "displayValue": st.get("displayValue"),
+                        "value": st.get("value"),
+                    }
+                    for st in (c.get("stats") or [])
+                    if st.get("name") is not None
+                ],
+            }
+            for c in cats
+        ],
+    }
 
 # -----------------------
 # Upserts
@@ -179,8 +224,7 @@ ON CONFLICT (espn_id) DO UPDATE SET
   penalty_json = EXCLUDED.penalty_json,
   drive_ref = EXCLUDED.drive_ref,
   probability_ref = EXCLUDED.probability_ref,
-  raw_data = EXCLUDED.raw_data
-RETURNING id;
+  raw_data = EXCLUDED.raw_data;
 """
 
 UPSERT_PARTICIPANT_SQL = """
@@ -264,8 +308,8 @@ def parse_play_row(play_obj: Dict[str, Any], event_id: str, team_map: Dict[str, 
         "modified": parse_ts(play_obj.get("modified")),
         "home_score": play_obj.get("homeScore"),
         "away_score": play_obj.get("awayScore"),
-        "scoring_play": play_obj.get("scoringPlay"),
-        "priority": play_obj.get("priority"),
+        "scoring_play": to_bool(play_obj.get("scoringPlay")),
+        "priority": to_bool(play_obj.get("priority")),
         "score_value": play_obj.get("scoreValue"),
         "stat_yardage": play_obj.get("statYardage"),
         "team_id": play_team_pk,
@@ -279,105 +323,332 @@ def parse_play_row(play_obj: Dict[str, Any], event_id: str, team_map: Dict[str, 
         "raw_data": json.dumps(play_obj),
     }
 
-def upsert_participants(cur, play_db_id: int, play_obj: Dict[str, Any],
-                        team_map: Dict[str, int], athlete_map: Dict[str, int]):
-    # Build a "best guess" team for participant:
-    # 1) if their athlete exists in espn_athlete with team_id already set, use that (optional)
-    # 2) else use play.team_id as fallback
-    # For now: use play.team_id fallback only.
+def build_participant_rows(
+    play_db_id: int,
+    play_obj: Dict[str, Any],
+    team_map: Dict[str, int],
+    athlete_map: Dict[str, int],
+) -> list[Dict[str, Any]]:
     play_team_ref = ((play_obj.get("team") or {}).get("$ref")) or ""
     play_team_espn = espn_id_from_ref(play_team_ref)
     play_team_pk = team_map.get(str(play_team_espn)) if play_team_espn else None
 
+    out: list[Dict[str, Any]] = []
     for p in (play_obj.get("participants") or []):
         aref = ((p.get("athlete") or {}).get("$ref")) or ""
         aid = espn_id_from_ref(aref)
-
         athlete_pk = athlete_map.get(str(aid)) if aid else None
 
-        params = {
-            "play_id": play_db_id,
-            "athlete_id": athlete_pk,
-            "team_id": play_team_pk,
-            "role_type": p.get("type"),
-            "order": p.get("order"),
-            "athlete_espn_id": str(aid) if aid else None,
-            "team_espn_id": str(play_team_espn) if play_team_espn else None,
-            "position_ref": ((p.get("position") or {}).get("$ref")),
-            "statistics_ref": ((p.get("statistics") or {}).get("$ref")),
-            "play_statistics_ref": ((p.get("playStatistics") or {}).get("$ref")),
-            "raw_data": json.dumps(p),
-        }
-        cur.execute(UPSERT_PARTICIPANT_SQL, params)
+        out.append(
+            {
+                "play_id": play_db_id,
+                "athlete_id": athlete_pk,
+                "team_id": play_team_pk,
+                "role_type": p.get("type"),
+                "order": p.get("order"),
+                # IMPORTANT: never NULL for uniqueness behavior
+                "athlete_espn_id": str(aid) if aid else "unknown",
+                "team_espn_id": str(play_team_espn) if play_team_espn else None,
+                "position_ref": ((p.get("position") or {}).get("$ref")),
+                "statistics_ref": ((p.get("statistics") or {}).get("$ref")),
+                "play_statistics_ref": ((p.get("playStatistics") or {}).get("$ref")),
+                "raw_data": json.dumps(p),
+            }
+        )
+    return out
 
+# --- new: parse stats payload into normalized rows ---
+def extract_stats(payload: dict) -> list[tuple[str, str]]:
+    out = []
+    splits = payload.get("splits") or {}
+    for cat in (splits.get("categories") or []):
+        for st in (cat.get("stats") or []):
+            key = st.get("name")
+            if not key:
+                continue
+            # prefer displayValue, fallback to numeric value
+            val = st.get("displayValue")
+            if val is None:
+                v = st.get("value")
+                val = None if v is None else str(v)
+            out.append((str(key), None if val is None else str(val)))
+    return out
 
-# -----------------------
-# Main
-# -----------------------
+# --- participant execute_values template (tuple-based for speed) ---
+PART_COLS = [
+    "play_id",
+    "athlete_id",
+    "team_id",
+    "role_type",
+    "order",
+    "athlete_espn_id",
+    "team_espn_id",
+    "position_ref",
+    "statistics_ref",
+    "play_statistics_ref",
+    "raw_data",
+]
+
+PART_TEMPLATE = "(" + ",".join(["now()", "now()"] + ["%s"] * len(PART_COLS[:-1]) + ["%s::jsonb"]) + ")"
+# Explanation: created_at, updated_at are now(); last field raw_data is cast to jsonb
+
+PART_VALUES_SQL = """
+INSERT INTO public.espn_play_participant (
+  created_at, updated_at,
+  play_id, athlete_id, team_id,
+  role_type, "order",
+  athlete_espn_id, team_espn_id,
+  position_ref, statistics_ref, play_statistics_ref,
+  raw_data
+) VALUES %s
+ON CONFLICT (play_id, athlete_espn_id, role_type, "order") DO UPDATE SET
+  updated_at = now(),
+  athlete_id = EXCLUDED.athlete_id,
+  team_id = EXCLUDED.team_id,
+  team_espn_id = EXCLUDED.team_espn_id,
+  position_ref = EXCLUDED.position_ref,
+  statistics_ref = EXCLUDED.statistics_ref,
+  play_statistics_ref = EXCLUDED.play_statistics_ref,
+  raw_data = EXCLUDED.raw_data;
+"""
+
+UPSERT_PLAY_STAT_SQL = """
+INSERT INTO public.espn_play_stat (
+  created_at,
+  play_id,
+  scope,
+  athlete_id,
+  team_id,
+  athlete_id_norm,
+  team_id_norm,
+  stat_type,
+  stat_key,
+  stat_value,
+  raw_data
+) VALUES (
+  now(),
+  %(play_id)s,
+  %(scope)s,
+  %(athlete_id)s,
+  %(team_id)s,
+  %(athlete_id_norm)s,
+  %(team_id_norm)s,
+  %(stat_type)s,
+  %(stat_key)s,
+  %(stat_value)s,
+  %(raw_data)s::jsonb
+)
+ON CONFLICT (play_id, scope, athlete_id_norm, team_id_norm, stat_key) DO UPDATE SET
+  stat_type = EXCLUDED.stat_type,
+  stat_value = EXCLUDED.stat_value,
+  raw_data = EXCLUDED.raw_data;
+"""
+
+def build_participant_stat_rows(session, play_db_id, play_obj, play_team_pk, athlete_map):
+    rows = []
+    for p in (play_obj.get("participants") or []):
+        aref = ((p.get("athlete") or {}).get("$ref")) or ""
+        athlete_espn_id = espn_id_from_ref(aref)
+        athlete_pk = athlete_map.get(str(athlete_espn_id)) if athlete_espn_id else None
+
+        for ref_key in ("statistics", "playStatistics"):
+            sref = ((p.get(ref_key) or {}).get("$ref")) or ""
+            if not sref:
+                continue
+
+            payload = get_json(session, sref)
+
+            # ✅ stable 0/1 from URL
+            stat_type = stat_type_from_ref(sref)
+
+            # ✅ lean raw_data
+            raw = {
+                "ref": sref,
+                "ref_key": ref_key,
+                "stat_type": stat_type,
+                "splits_id": (payload.get("splits") or {}).get("id"),
+                "athlete_espn_id": athlete_espn_id,   # super useful
+            }
+
+            for stat_key, stat_value in extract_stats(payload):
+                rows.append({
+                    "play_id": play_db_id,
+                    "scope": "participant",
+                    "athlete_id": athlete_pk,
+                    "team_id": play_team_pk,
+                    "athlete_id_norm": int(athlete_pk or 0),
+                    "team_id_norm": int(play_team_pk or 0),
+                    "stat_type": stat_type,
+                    "stat_key": stat_key,
+                    "stat_value": stat_value,
+                    "raw_data": json.dumps(raw),
+                })
+    return rows
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--sport", default="football")
     ap.add_argument("--league", default="nfl")
-    ap.add_argument("--sleep", type=float, default=0.05)
+    ap.add_argument("--sleep", type=float, default=0.0)
 
-    # input events:
-    ap.add_argument("--event-id", action="append", default=[], help="One or more event ids (repeatable).")
-    ap.add_argument("--events-sql", default="", help="SQL that returns one column of event_espn_id values.")
+    ap.add_argument("--event-id", action="append", default=[])
+    ap.add_argument("--events-sql", default="")
     ap.add_argument("--limit-events", type=int, default=0)
 
+    ap.add_argument("--play-batch-size", type=int, default=250)
+    ap.add_argument("--participant-batch-size", type=int, default=5000)
     args = ap.parse_args()
+
     s = session_with_retries()
+    engine = get_engine()
 
-    with pg_conn() as conn, conn.cursor() as cur:
-        team_map = build_team_lookup(cur)
-        athlete_map = build_athlete_lookup(cur)
+    PLAY_BATCH_SIZE = max(1, int(args.play_batch_size))
+    PART_BATCH_SIZE = max(1, int(args.participant_batch_size))
+    STAT_BATCH_SIZE = 5000
+    stat_batch: list[dict] = []
 
-        # resolve events
-        event_ids = [str(x) for x in args.event_id if str(x).strip()]
-        if args.events_sql:
-            cur.execute(args.events_sql)
-            event_ids.extend([str(r[0]) for r in cur.fetchall()])
+    with engine.begin() as conn:
+        raw = conn.connection  # psycopg2
+        with raw.cursor() as cur:
+            team_map = build_team_lookup(cur)
+            athlete_map = build_athlete_lookup(cur)
 
-        # de-dupe
-        event_ids = list(dict.fromkeys(event_ids))
-        if args.limit_events and args.limit_events > 0:
-            event_ids = event_ids[: args.limit_events]
+            # resolve events
+            event_ids = [str(x) for x in args.event_id if str(x).strip()]
+            if args.events_sql:
+                cur.execute(args.events_sql)
+                event_ids.extend([str(r[0]) for r in cur.fetchall()])
 
-        if not event_ids:
-            raise SystemExit("No events provided. Use --event-id ... or --events-sql ...")
+            event_ids = list(dict.fromkeys(event_ids))
+            if args.limit_events and args.limit_events > 0:
+                event_ids = event_ids[: args.limit_events]
 
-        plays_processed = 0
-        parts_processed = 0
+            if not event_ids:
+                raise SystemExit("No events provided. Use --event-id ... or --events-sql ...")
 
-        for event_id in event_ids:
-            url = plays_url(args.sport, args.league, event_id)
-            print(f"[event {event_id}] plays: {url}")
+            plays_processed = 0
+            parts_processed = 0
 
-            for pref in iter_play_refs(s, url):
-                play_obj = get_json(s, pref)
+            participant_batch: list[Dict[str, Any]] = []
 
-                play_row = parse_play_row(play_obj, event_id, team_map)
+            def flush_stats():
+                nonlocal stat_batch
+                if not stat_batch:
+                    return
+                execute_batch(cur, UPSERT_PLAY_STAT_SQL, stat_batch, page_size=500)
+                stat_batch = []
+                
+            def flush_participants():
+                nonlocal participant_batch, parts_processed
+                if not participant_batch:
+                    return
 
-                cur.execute(UPSERT_PLAY_SQL, play_row)
-                play_db_id = cur.fetchone()[0]
-                plays_processed += 1
+                tuples = [tuple(p[c] for c in PART_COLS) for p in participant_batch]
+                execute_values(
+                    cur,
+                    PART_VALUES_SQL,
+                    tuples,
+                    template=PART_TEMPLATE,
+                    page_size=1000,
+                )
+                parts_processed += len(participant_batch)
+                participant_batch = []
 
-                before = parts_processed
-                upsert_participants(cur, play_db_id, play_obj, team_map, athlete_map)
-                # we can’t easily count rows inserted w/out RETURNING; rough count:
-                parts_processed += len(play_obj.get("participants") or [])
+            def flush_plays(play_batch: list[dict], play_objs_by_espn_id: dict):
+                nonlocal plays_processed, participant_batch, stat_batch
 
-                if args.sleep:
-                    time.sleep(args.sleep)
+                if not play_batch:
+                    return
 
-                if plays_processed % 500 == 0:
-                    conn.commit()
-                    print(f"  committed at plays={plays_processed} participants≈{parts_processed}")
+                # upsert plays (dict-params)
+                execute_batch(cur, UPSERT_PLAY_SQL, play_batch, page_size=250)
 
-            conn.commit()
-            print(f"[event {event_id}] done. plays={plays_processed} participants≈{parts_processed}")
+                espn_ids: list[str] = [str(p["espn_id"]) for p in play_batch if p.get("espn_id")]
+                if not espn_ids:
+                    return
 
-    print("✅ finished")
+                # fetch db ids for the batch
+                cur.execute(
+                    "SELECT id, espn_id FROM public.espn_play WHERE espn_id = ANY(%s::text[]);",
+                    (espn_ids,),
+                )
+                id_map = {str(r[1]): int(r[0]) for r in cur.fetchall()}
+
+                # build participants for each play
+                for espn_id in espn_ids:
+                    play_db_id = id_map.get(espn_id)
+                    pobj = play_objs_by_espn_id.get(espn_id)
+                    if not play_db_id or not pobj:
+                        continue
+
+                    # figure out play_team_pk once per play for stats
+                    play_team_ref = ((pobj.get("team") or {}).get("$ref")) or ""
+                    play_team_espn = espn_id_from_ref(play_team_ref)
+                    play_team_pk = team_map.get(str(play_team_espn)) if play_team_espn else None
+
+                    participant_batch.extend(
+                        build_participant_rows(play_db_id, pobj, team_map, athlete_map)
+                    )
+
+                    if len(participant_batch) >= PART_BATCH_SIZE:
+                        flush_participants()
+
+                    # queue participant stats rows
+                    stat_batch.extend(
+                        build_participant_stat_rows(
+                            session=s,
+                            play_db_id=play_db_id,
+                            play_obj=pobj,
+                            play_team_pk=play_team_pk,
+                            athlete_map=athlete_map,
+                        )
+                    )
+                    if len(stat_batch) >= STAT_BATCH_SIZE:
+                        flush_stats()
+
+                plays_processed += len(play_batch)
+
+            for event_id in event_ids:
+                url = plays_url(args.sport, args.league, event_id)
+                print(f"[event {event_id}] starting plays ingest", flush=True)
+
+                play_batch: list[dict] = []
+                play_objs_by_espn_id: dict[str, dict] = {}
+
+                for pref in iter_play_refs(s, url):
+                    play_obj = get_json(s, pref)
+                    play_row = parse_play_row(play_obj, event_id, team_map)
+                    espn_id = str(play_row.get("espn_id") or "").strip()
+                    if not espn_id:
+                        continue
+
+                    play_batch.append(play_row)
+                    play_objs_by_espn_id[espn_id] = play_obj
+
+                    if len(play_batch) >= PLAY_BATCH_SIZE:
+                        flush_plays(play_batch, play_objs_by_espn_id)
+                        play_batch = []
+                        play_objs_by_espn_id = {}
+
+                        print(
+                            f"[event {event_id}] plays={plays_processed} participants_flushed={parts_processed} queued={len(participant_batch)}",
+                            flush=True,
+                        )
+
+                    if args.sleep:
+                        time.sleep(args.sleep)
+
+                # flush leftovers for this event
+                flush_plays(play_batch, play_objs_by_espn_id)
+                flush_stats()
+                flush_participants()
+
+                print(
+                    f"[event {event_id}] done. plays_total={plays_processed} participants_total={parts_processed}",
+                    flush=True,
+                )
+
+    print("✅ finished", flush=True)
     return 0
 
 

@@ -14,10 +14,13 @@ services:
       dockerfile: dockerfile
     image: airflow-ml-dbt:latest
     container_name: airflow-webserver
+    hostname: airflow-webserver
     depends_on:
       airflow-redis:
         condition: service_started
     environment:
+      - AIRFLOW__CORE__DEFAULT_TIMEZONE=America/New_York
+      - AIRFLOW__WEBSERVER__DEFAULT_UI_TIMEZONE=America/New_York
       - AIRFLOW__CORE__EXECUTOR=CeleryExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@postgres:5432/${AIRFLOW_DB_NAME}
       - AIRFLOW__CELERY__BROKER_URL=redis://airflow-redis:6379/0
@@ -27,21 +30,25 @@ services:
       - AIRFLOW_GID=${AIRFLOW_GID}
       - AIRFLOW__WEBSERVER__WEB_SERVER_HOST=0.0.0.0
       - AIRFLOW__WEBSERVER__WEB_SERVER_PORT=8080
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW__WEBSERVER__SECRET_KEY}
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=${AIRFLOW_DB_NAME}
       - DB_USER=${AIRFLOW_DB_USER}
       - DB_PASSWORD=${AIRFLOW_DB_PASSWORD}
+      - ESPN_DB_HOST=postgres
+      - ESPN_DB_PORT=5432
+      - ESPN_DB_NAME=${ESPN_DB_NAME}
+      - ESPN_DB_USER=${ESPN_DB_USER}
+      - ESPN_DB_PASSWORD=${ESPN_DB_PASSWORD}
+      - ANALYTICS_DB_HOST=postgres
+      - ANALYTICS_DB_PORT=5432
+      - ANALYTICS_DB_NAME=${ANALYTICS_DB_NAME}
+      - ANALYTICS_DB_USER=${ANALYTICS_DB_USER}
+      - ANALYTICS_DB_PASSWORD=${ANALYTICS_DB_PASSWORD}
+      - DBT_PROFILES_DIR=${DBT_PROFILES_DIR}
       - DOCKER_HOST=unix:///var/run/docker.sock
-    volumes:
-      - ./airflow/dags:/opt/airflow/dags
-      - ./airflow/jobs:/opt/airflow/jobs
-      - ./airflow/sql:/opt/airflow/sql
-      - ./airflow/logs:/opt/airflow/logs
-      - ./airflow/plugins:/opt/airflow/plugins
-      - ./airflow/config:/opt/airflow/config
-      - /var/run/docker.sock:/var/run/docker.sock
-      - /opt/ppd/data:/data
+
     command: webserver
     ports:
       - "18080:8080"
@@ -55,22 +62,37 @@ services:
       dockerfile: dockerfile
     image: airflow-ml-dbt:latest
     container_name: airflow-scheduler
+    hostname: airflow-scheduler
     depends_on:
       airflow-redis:
         condition: service_started
     environment:
+      - AIRFLOW__CORE__DEFAULT_TIMEZONE=America/New_York
+      - AIRFLOW__WEBSERVER__DEFAULT_UI_TIMEZONE=America/New_York
       - AIRFLOW__CORE__EXECUTOR=CeleryExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@postgres:5432/${AIRFLOW_DB_NAME}
       - AIRFLOW__CELERY__BROKER_URL=redis://airflow-redis:6379/0
       - AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@postgres:5432/${AIRFLOW_DB_NAME}
       - AIRFLOW__CORE__LOAD_EXAMPLES=${AIRFLOW__CORE__LOAD_EXAMPLES:-False}
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW__WEBSERVER__SECRET_KEY}
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=${AIRFLOW_DB_NAME}
       - DB_USER=${AIRFLOW_DB_USER}
       - DB_PASSWORD=${AIRFLOW_DB_PASSWORD}
+      - ESPN_DB_HOST=postgres
+      - ESPN_DB_PORT=5432
+      - ESPN_DB_NAME=${ESPN_DB_NAME}
+      - ESPN_DB_USER=${ESPN_DB_USER}
+      - ESPN_DB_PASSWORD=${ESPN_DB_PASSWORD}
       - AIRFLOW_UID=${AIRFLOW_UID}
+      - ANALYTICS_DB_HOST=postgres
+      - ANALYTICS_DB_PORT=5432
+      - ANALYTICS_DB_NAME=${ANALYTICS_DB_NAME}
+      - ANALYTICS_DB_USER=${ANALYTICS_DB_USER}
+      - ANALYTICS_DB_PASSWORD=${ANALYTICS_DB_PASSWORD}
       - AIRFLOW_GID=${AIRFLOW_GID}
+      - DBT_PROFILES_DIR=${DBT_PROFILES_DIR}
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/jobs:/opt/airflow/jobs
@@ -80,6 +102,13 @@ services:
       - ./airflow/config:/opt/airflow/config
       - /var/run/docker.sock:/var/run/docker.sock
       - /opt/ppd/data:/data
+      # dbt project (models/macros/etc) so the container can run `dbt build`
+      - /opt/ppd/stacks/airflow/airflow/dbt:/opt/airflow/dbt:rw
+      - /opt/ppd/stacks/airflow/airflow/dbt_artifacts:/opt/airflow/dbt_artifacts:rw
+      # dbt profiles.yml location (so you don't have to bake it into the image)
+      - /opt/airflow/.dbt:/opt/airflow/.dbt:ro
+      # runtime env file directory produced by op inject (so BashOperators can read it if needed)
+      - /opt/config/runtime:/opt/config/runtime:ro
     command: scheduler
     restart: unless-stopped
     networks:
@@ -91,22 +120,37 @@ services:
       dockerfile: dockerfile
     image: airflow-ml-dbt:latest
     container_name: airflow-worker
+    hostname: airflow-worker
     depends_on:
       airflow-redis:
         condition: service_started
     environment:
+      - AIRFLOW__CORE__DEFAULT_TIMEZONE=America/New_York
+      - AIRFLOW__WEBSERVER__DEFAULT_UI_TIMEZONE=America/New_York
       - AIRFLOW__CORE__EXECUTOR=CeleryExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@postgres:5432/${AIRFLOW_DB_NAME}
       - AIRFLOW__CELERY__BROKER_URL=redis://airflow-redis:6379/0
       - AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@postgres:5432/${AIRFLOW_DB_NAME}
       - AIRFLOW__CORE__LOAD_EXAMPLES=${AIRFLOW__CORE__LOAD_EXAMPLES:-False}
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW__WEBSERVER__SECRET_KEY}
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=${AIRFLOW_DB_NAME}
       - DB_USER=${AIRFLOW_DB_USER}
       - DB_PASSWORD=${AIRFLOW_DB_PASSWORD}
+      - ESPN_DB_HOST=postgres
+      - ESPN_DB_PORT=5432
+      - ESPN_DB_NAME=${ESPN_DB_NAME}
+      - ESPN_DB_USER=${ESPN_DB_USER}
+      - ESPN_DB_PASSWORD=${ESPN_DB_PASSWORD}
+      - ANALYTICS_DB_HOST=postgres
+      - ANALYTICS_DB_PORT=5432
+      - ANALYTICS_DB_NAME=${ANALYTICS_DB_NAME}
+      - ANALYTICS_DB_USER=${ANALYTICS_DB_USER}
+      - ANALYTICS_DB_PASSWORD=${ANALYTICS_DB_PASSWORD}
       - AIRFLOW_UID=${AIRFLOW_UID}
       - AIRFLOW_GID=${AIRFLOW_GID}
+      - DBT_PROFILES_DIR=${DBT_PROFILES_DIR}
       - DOCKER_HOST=unix:///var/run/docker.sock
     volumes:
       - ./airflow/dags:/opt/airflow/dags
@@ -117,6 +161,13 @@ services:
       - ./airflow/config:/opt/airflow/config
       - /var/run/docker.sock:/var/run/docker.sock
       - /opt/ppd/data:/data
+      # dbt project (models/macros/etc) so the container can run `dbt build`
+      - /opt/ppd/stacks/airflow/airflow/dbt:/opt/airflow/dbt:rw
+      - /opt/ppd/stacks/airflow/airflow/dbt_artifacts:/opt/airflow/dbt_artifacts:rw
+      # dbt profiles.yml location (so you don't have to bake it into the image)
+      - /opt/airflow/.dbt:/opt/airflow/.dbt:ro
+      # runtime env file directory produced by op inject (so BashOperators can read it if needed)
+      - /opt/config/runtime:/opt/config/runtime:ro
     command: celery worker
     restart: unless-stopped
     networks:
@@ -132,14 +183,17 @@ services:
       airflow-redis:
         condition: service_started
     environment:
+      - AIRFLOW__CORE__DEFAULT_TIMEZONE=America/New_York
+      - AIRFLOW__WEBSERVER__DEFAULT_UI_TIMEZONE=America/New_York
       - AIRFLOW__CORE__EXECUTOR=CeleryExecutor
       - AIRFLOW__CELERY__BROKER_URL=redis://airflow-redis:6379/0
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@postgres:5432/${AIRFLOW_DB_NAME}
       - AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@postgres:5432/${AIRFLOW_DB_NAME}
       - _AIRFLOW_DB_UPGRADE=true
       - _AIRFLOW_WWW_USER_CREATE=true
-      - _AIRFLOW_WWW_USER_USERNAME=admin
-      - _AIRFLOW_WWW_USER_PASSWORD=admin
+      - _AIRFLOW_WWW_USER_USERNAME=${_AIRFLOW_WWW_USER_USERNAME}
+      - _AIRFLOW_WWW_USER_PASSWORD=${_AIRFLOW_WWW_USER_PASSWORD}
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW__WEBSERVER__SECRET_KEY}
       - AIRFLOW_UID=${AIRFLOW_UID}
       - AIRFLOW_GID=${AIRFLOW_GID}
       - DOCKER_HOST=unix:///var/run/docker.sock
