@@ -11,10 +11,13 @@ from sqlalchemy import create_engine, text
 from psycopg2.extras import execute_batch  # already imported in your other scripts
 # optional:
 from psycopg2.extras import execute_values
-
+import csv
+from pathlib import Path
+import hashlib
 import requests
 from requests.adapters import HTTPAdapter
 import psycopg2
+from typing import Optional
 
 try:
     from urllib3.util.retry import Retry
@@ -23,6 +26,11 @@ except Exception:
 
 CORE_BASE = "http://sports.core.api.espn.com/v2"
 
+OFFENSE_ROLES = {
+  "passer","receiver","rusher","fumbler","kicker","punter","returner",
+  "holder","snapper","blocker"
+}
+DEFENSE_ROLES = {"tackler","interceptor","sacker","defender","recoverer"}
 
 # -----------------------
 # HTTP helpers
@@ -64,6 +72,37 @@ def get_json(s: requests.Session, url: str, timeout: int = 30) -> Dict[str, Any]
     r.raise_for_status()
     return r.json()
 
+def get_off_def_team_pks(play_obj, team_map):
+    offense_pk = None
+    defense_pk = None
+
+    for tp in play_obj.get("teamParticipants", []):
+        ref = (tp.get("team") or {}).get("$ref")
+        tid = espn_id_from_ref(ref) if ref else None
+        if not tid:
+            continue
+
+        pk = team_map.get(str(tid))
+        if tp.get("type") == "offense":
+            offense_pk = pk
+        elif tp.get("type") == "defense":
+            defense_pk = pk
+
+    return offense_pk, defense_pk
+
+def participant_team_pk(role, offense_pk, defense_pk, play_team_pk=None, explicit_team_pk=None):
+    # 1) explicit team (if ESPN ever provides it on participant)
+    if explicit_team_pk:
+        return explicit_team_pk
+
+    # 2) role mapping
+    if role in OFFENSE_ROLES and offense_pk:
+        return offense_pk
+    if role in DEFENSE_ROLES and defense_pk:
+        return defense_pk
+
+    # 3) last resort fallback
+    return play_team_pk
 
 # -----------------------
 # DB helpers
@@ -84,6 +123,11 @@ def get_engine() -> "sqlalchemy.Engine":
 
     url = f"postgresql+psycopg2://{user}:{pwd}@{host}:{port}/{db}"
     return create_engine(url,execution_options={"stream_results": True})
+
+def payload_hash(raw: dict) -> str:
+    # stable string -> stable hash
+    s = json.dumps(raw, separators=(",", ":"), sort_keys=True)
+    return hashlib.md5(s.encode("utf-8")).hexdigest()
 
 def to_bool(v):
     if v is None: return None
@@ -136,7 +180,7 @@ def iter_play_refs(session: requests.Session, url: str) -> Iterable[str]:
             break
         page += 1
 
-def stat_type_from_ref(sref: str) -> str | None:
+def stat_type_from_ref(sref: str) -> Optional[str]:
     m = re.search(r"/(statistics|playStatistics)/(\d+)(?:/|\?|$)", sref)
     return m.group(2) if m else None
 
@@ -163,6 +207,44 @@ def slim_payload(payload: dict, sref: str, ref_key: str) -> dict:
             for c in cats
         ],
     }
+
+def load_stat_flags(path: str) -> dict[tuple[str, str], bool]:
+    """
+    Returns {(stat_type, stat_key): include_bool}
+    Supports stat_type='*' rows.
+    """
+    rules: dict[str, bool] = {}
+    if not path:
+        return rules
+    p = Path(path)
+    if not p.exists():
+        raise RuntimeError(f"stat flags csv not found: {path}")
+
+    with p.open("r", newline="") as f:
+        r = csv.DictReader(f)
+        for row in r:
+            stat_key = (row.get("stat_key") or "").strip()
+            inc = (row.get("include") or "1").strip().lower() in ("1", "true", "t", "yes", "y")
+            if stat_key:
+                rules[(stat_key)] = inc
+    return rules
+
+def stat_allowed(rules: dict[str, bool], stat_key: str) -> bool:
+    if not rules:
+        return True  # no filter configured
+    # explicit match wins; then wildcard stat_type; then default include
+    if (stat_key) in rules:
+        return rules[(stat_key)]
+    return True
+
+def get_payload_id(cur, cache: dict[str, int], raw: dict) -> int:
+    ph = payload_hash(raw)
+    if ph in cache:
+        return cache[ph]
+    cur.execute(PAYLOAD_UPSERT_SQL, (ph, json.dumps(raw)))
+    pid = int(cur.fetchone()[0])
+    cache[ph] = pid
+    return pid
 
 # -----------------------
 # Upserts
@@ -253,7 +335,65 @@ ON CONFLICT (play_id, athlete_espn_id, role_type, "order") DO UPDATE SET
   play_statistics_ref = EXCLUDED.play_statistics_ref,
   raw_data = EXCLUDED.raw_data;
 """
+PAYLOAD_UPSERT_SQL = """
+insert into public.espn_stat_payload (payload_hash, payload)
+values (%s, %s::jsonb)
+on conflict (payload_hash) do update
+  set updated_at = now()
+returning id;
+"""
 
+PART_VALUES_SQL = """
+INSERT INTO public.espn_play_participant (
+  created_at, updated_at,
+  play_id, athlete_id, team_id,
+  role_type, "order",
+  athlete_espn_id, team_espn_id,
+  position_ref, statistics_ref, play_statistics_ref,
+  raw_data
+) VALUES %s
+ON CONFLICT (play_id, athlete_espn_id, role_type, "order") DO UPDATE SET
+  updated_at = now(),
+  athlete_id = EXCLUDED.athlete_id,
+  team_id = EXCLUDED.team_id,
+  team_espn_id = EXCLUDED.team_espn_id,
+  position_ref = EXCLUDED.position_ref,
+  statistics_ref = EXCLUDED.statistics_ref,
+  play_statistics_ref = EXCLUDED.play_statistics_ref,
+  raw_data = EXCLUDED.raw_data;
+"""
+
+UPSERT_PLAY_STAT_SQL = """
+INSERT INTO public.espn_play_stat (
+  created_at,
+  play_id,
+  scope,
+  athlete_id,
+  team_id,
+  athlete_id_norm,
+  team_id_norm,
+  stat_type,
+  stat_key,
+  stat_value,
+  payload_id
+) VALUES (
+  now(),
+  %(play_id)s,
+  %(scope)s,
+  %(athlete_id)s,
+  %(team_id)s,
+  %(athlete_id_norm)s,
+  %(team_id_norm)s,
+  %(stat_type)s,
+  %(stat_key)s,
+  %(stat_value)s,
+  %(payload_id)s
+)
+ON CONFLICT (play_id, scope, athlete_id_norm, team_id_norm, stat_key) DO UPDATE SET
+  stat_type = EXCLUDED.stat_type,
+  stat_value = EXCLUDED.stat_value,
+  payload_id = EXCLUDED.payload_id;
+"""
 
 def build_team_lookup(cur) -> Dict[str, int]:
     cur.execute("SELECT id, espn_id FROM public.espn_team WHERE espn_id IS NOT NULL;")
@@ -392,64 +532,15 @@ PART_COLS = [
 PART_TEMPLATE = "(" + ",".join(["now()", "now()"] + ["%s"] * len(PART_COLS[:-1]) + ["%s::jsonb"]) + ")"
 # Explanation: created_at, updated_at are now(); last field raw_data is cast to jsonb
 
-PART_VALUES_SQL = """
-INSERT INTO public.espn_play_participant (
-  created_at, updated_at,
-  play_id, athlete_id, team_id,
-  role_type, "order",
-  athlete_espn_id, team_espn_id,
-  position_ref, statistics_ref, play_statistics_ref,
-  raw_data
-) VALUES %s
-ON CONFLICT (play_id, athlete_espn_id, role_type, "order") DO UPDATE SET
-  updated_at = now(),
-  athlete_id = EXCLUDED.athlete_id,
-  team_id = EXCLUDED.team_id,
-  team_espn_id = EXCLUDED.team_espn_id,
-  position_ref = EXCLUDED.position_ref,
-  statistics_ref = EXCLUDED.statistics_ref,
-  play_statistics_ref = EXCLUDED.play_statistics_ref,
-  raw_data = EXCLUDED.raw_data;
-"""
-
-UPSERT_PLAY_STAT_SQL = """
-INSERT INTO public.espn_play_stat (
-  created_at,
-  play_id,
-  scope,
-  athlete_id,
-  team_id,
-  athlete_id_norm,
-  team_id_norm,
-  stat_type,
-  stat_key,
-  stat_value,
-  raw_data
-) VALUES (
-  now(),
-  %(play_id)s,
-  %(scope)s,
-  %(athlete_id)s,
-  %(team_id)s,
-  %(athlete_id_norm)s,
-  %(team_id_norm)s,
-  %(stat_type)s,
-  %(stat_key)s,
-  %(stat_value)s,
-  %(raw_data)s::jsonb
-)
-ON CONFLICT (play_id, scope, athlete_id_norm, team_id_norm, stat_key) DO UPDATE SET
-  stat_type = EXCLUDED.stat_type,
-  stat_value = EXCLUDED.stat_value,
-  raw_data = EXCLUDED.raw_data;
-"""
-
-def build_participant_stat_rows(session, play_db_id, play_obj, play_team_pk, athlete_map):
+def build_participant_stat_rows(session, cur, payload_cache, play_db_id, play_obj, play_team_pk, offense_pk, defense_pk, athlete_map, stat_rules):
     rows = []
     for p in (play_obj.get("participants") or []):
         aref = ((p.get("athlete") or {}).get("$ref")) or ""
         athlete_espn_id = espn_id_from_ref(aref)
         athlete_pk = athlete_map.get(str(athlete_espn_id)) if athlete_espn_id else None
+        role = p.get("type")
+        explicit_team_pk = None  # if you later add parsing for participant.team
+        team_pk = participant_team_pk(role, offense_pk, defense_pk, play_team_pk=play_team_pk, explicit_team_pk=explicit_team_pk)
 
         for ref_key in ("statistics", "playStatistics"):
             sref = ((p.get(ref_key) or {}).get("$ref")) or ""
@@ -470,7 +561,20 @@ def build_participant_stat_rows(session, play_db_id, play_obj, play_team_pk, ath
                 "athlete_espn_id": athlete_espn_id,   # super useful
             }
 
+            # DEFINE raw_payload HERE (once per endpoint)
+            raw_payload = {
+                "ref": sref,
+                "ref_key": ref_key,
+                "stat_type": stat_type,
+                "splits_id": (payload.get("splits") or {}).get("id"),
+                "athlete_espn_id": athlete_espn_id,
+            }
+
+            # Resolve payload_id ONCE
+            payload_id = get_payload_id(cur, payload_cache, raw_payload)
             for stat_key, stat_value in extract_stats(payload):
+                if not stat_allowed(stat_rules, stat_key):
+                    continue
                 rows.append({
                     "play_id": play_db_id,
                     "scope": "participant",
@@ -481,7 +585,7 @@ def build_participant_stat_rows(session, play_db_id, play_obj, play_team_pk, ath
                     "stat_type": stat_type,
                     "stat_key": stat_key,
                     "stat_value": stat_value,
-                    "raw_data": json.dumps(raw),
+                    "payload_id": payload_id,
                 })
     return rows
 
@@ -490,13 +594,12 @@ def main():
     ap.add_argument("--sport", default="football")
     ap.add_argument("--league", default="nfl")
     ap.add_argument("--sleep", type=float, default=0.0)
-
     ap.add_argument("--event-id", action="append", default=[])
     ap.add_argument("--events-sql", default="")
     ap.add_argument("--limit-events", type=int, default=0)
-
     ap.add_argument("--play-batch-size", type=int, default=250)
     ap.add_argument("--participant-batch-size", type=int, default=5000)
+    ap.add_argument("--stat-flags-csv", default=os.getenv("ESPN_STAT_FLAGS_CSV", ""))
     args = ap.parse_args()
 
     s = session_with_retries()
@@ -506,10 +609,15 @@ def main():
     PART_BATCH_SIZE = max(1, int(args.participant_batch_size))
     STAT_BATCH_SIZE = 5000
     stat_batch: list[dict] = []
+    payload_cache: dict[str, int] = {}
+
+    # Load CSV whitelist of stats to include
+    rules = load_stat_flags(args.stat_flags_csv)
+    
 
     with engine.begin() as conn:
-        raw = conn.connection  # psycopg2
-        with raw.cursor() as cur:
+        pg_conn = conn.connection  # psycopg2
+        with pg_conn.cursor() as cur:
             team_map = build_team_lookup(cur)
             athlete_map = build_athlete_lookup(cur)
 
@@ -593,14 +701,19 @@ def main():
                     if len(participant_batch) >= PART_BATCH_SIZE:
                         flush_participants()
 
-                    # queue participant stats rows
+                    off_pk, def_pk = get_off_def_team_pks(pobj, team_map)
                     stat_batch.extend(
                         build_participant_stat_rows(
                             session=s,
+                            cur=cur,
+                            payload_cache=payload_cache,
                             play_db_id=play_db_id,
                             play_obj=pobj,
                             play_team_pk=play_team_pk,
+                            offense_pk=off_pk,
+                            defense_pk=def_pk,
                             athlete_map=athlete_map,
+                            stat_rules=rules,
                         )
                     )
                     if len(stat_batch) >= STAT_BATCH_SIZE:

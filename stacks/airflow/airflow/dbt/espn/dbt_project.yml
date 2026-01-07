@@ -32,14 +32,6 @@ models:
       +tags: [ "staging", "espn" ]
 
     # --------------------------------
-    # INTERMEDIATE / TRANSFORM MODELS
-    # --------------------------------
-    intermediate:
-      +schema: intermediate
-      +materialized: view
-      +tags: [ "intermediate", "espn" ]
-
-    # --------------------------------
     # MARTS / ANALYTICS MODELS
     # --------------------------------
     marts:

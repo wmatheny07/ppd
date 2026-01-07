@@ -2,7 +2,7 @@ version: 2
 
 sources:
 - name: espn
-  schema: espn
+  schema: espn_raw
   description: "Raw ESPN ingestion tables"
 
   tables:
@@ -20,3 +20,6 @@ sources:
 
   - name: espn_athlete
     description: "Athletes from ESPN reference data"
+
+  - name: espn_play_stat
+    description: "Stats from each play"

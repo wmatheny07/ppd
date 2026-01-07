@@ -1,23 +1,28 @@
 with src as (
   select
-    id                                 as participant_stat_pk,
-
+    md5(
+      concat_ws('|',
+        ps.play_id::text,
+        p.event_espn_id::text,
+        p.competition_espn_id::text,
+        ps.athlete_id::text
+      )
+    ) as participant_stat_pk,
     play_id::bigint                    as play_id,          -- make sure this is DB play PK, not ESPN play id
-    event_id::bigint                   as event_id,
-    competition_id::bigint             as competition_id,
-
-    nullif(athlete_espn_id,'')::text   as athlete_espn_id,
-    nullif(position_espn_id,'')::text  as position_espn_id,
-
-    nullif(participant_type,'')::text  as participant_type,
-    participant_order::int             as participant_order,
-
+    p.event_espn_id::bigint                   as event_id,
+    p.competition_espn_id::bigint             as competition_id,
+    nullif(athlete_id::text,'')::text   as athlete_id,
+    nullif(a.position,'')::text  as position,
+    sequence_number             as participant_order,
     nullif(stat_type,'')::text         as stat_type,        -- '0'/'1' or whatever you store
-    stat_payload::jsonb                as stat_payload,
-
-    created_at,
-    updated_at
-  from {{ source('espn', 'espn_play_participant_stat') }}
+    ps.raw_data::jsonb                as stat_payload,
+    p.created_at,
+    p.updated_at
+  from {{ source('espn','espn_play_stat') }} ps
+  join {{ source('espn','espn_play') }} p
+    on ps.play_id = p.id
+  join {{ source('espn','espn_athlete') }} a
+    on ps.athlete_id = a.id
+  where scope = 'participant'
 )
-
 select * from src

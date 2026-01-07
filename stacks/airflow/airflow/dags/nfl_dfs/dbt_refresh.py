@@ -69,7 +69,7 @@ with DAG(
         --profiles-dir {DBT_PROFILES_DIR} \
         --target-path {DBT_ARTIFACTS_DIR}/target \
         --log-path {DBT_ARTIFACTS_DIR}/logs \
-        --select "marts.espn+ marts.dfs+"
+        --select "espn_analytics.espn+ espn_analytics.marts+ espn_analytics.staging+"
         """,
         env=COMMON_ENV,
         append_env=True,
