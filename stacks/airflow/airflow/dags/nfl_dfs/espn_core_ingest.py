@@ -15,7 +15,10 @@ DEFAULT_ARGS = {
 
 # Airflow Dataset markers (logical “this data is fresh” signals)
 ESPN_INGESTED = Dataset("dataset://espn/ingested")
-
+COMMON_ENV = {
+    "ANALYTICS_DB_URI": "{{ conn.analytics_postgres.get_uri() }}",
+    "ESPN_DB_URI": "{{ conn.espn_postgres.get_uri() }}",
+}
 with DAG(
     dag_id="espn_core_ingest",
     description="ESPN core ingest: events -> athletes -> play-by-play",
@@ -38,6 +41,7 @@ with DAG(
               --week-start {{ var.value.get('ESPN_WEEK_START', '1') }} \
               --week-end {{ var.value.get('ESPN_WEEK_END', '18') }}
             """,
+            env=COMMON_ENV,
             append_env=True,
         )
 
@@ -48,6 +52,7 @@ with DAG(
             python3 -u /opt/airflow/jobs/espn/pull_nfl_athletes.py \
             --season {{ var.value.get('ESPN_SEASON', '2025') }}
             """,
+            env=COMMON_ENV,
             append_env=True,
         )
 
@@ -68,6 +73,7 @@ with DAG(
             --play-batch-size 250 \
             --participant-batch-size 2000
             """,
+            env=COMMON_ENV,
             append_env=True,
         )
 

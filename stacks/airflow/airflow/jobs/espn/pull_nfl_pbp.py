@@ -18,6 +18,7 @@ import requests
 from requests.adapters import HTTPAdapter
 import psycopg2
 from typing import Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 try:
     from urllib3.util.retry import Retry
@@ -107,22 +108,20 @@ def participant_team_pk(role, offense_pk, defense_pk, play_team_pk=None, explici
 # -----------------------
 # DB helpers
 # -----------------------
-def get_engine() -> "sqlalchemy.Engine":
-    """
-    Prefers explicit DB_* env vars.
-    (You can keep your Airflow-conn approach too, but env is simplest for BashOperator.)
-    """
-    host = os.getenv("ESPN_DB_HOST", "").strip()
-    port = os.getenv("ESPN_DB_PORT", "5432").strip()
-    db = os.getenv("ESPN_DB_NAME", "").strip()
-    user = os.getenv("ESPN_DB_USER", "").strip()
-    pwd = os.getenv("ESPN_DB_PASSWORD", "").strip()
 
-    if not all([host, db, user, pwd]):
-        raise RuntimeError("Missing DB env vars (DB_HOST/DB_NAME/DB_USER/DB_PASSWORD).")
+def get_engine(env_var: str = "ANALYTICS_DB_URI") -> "sqlalchemy.Engine":
+    uri = os.getenv(env_var, "").strip()
+    if not uri:
+        raise RuntimeError(f"Missing DB connection URI in env var {env_var}")
 
-    url = f"postgresql+psycopg2://{user}:{pwd}@{host}:{port}/{db}"
-    return create_engine(url,execution_options={"stream_results": True})
+    # Normalize scheme from Airflow "postgres://" to SQLAlchemy "postgresql+psycopg2://"
+    if uri.startswith("postgres://"):
+        uri = uri.replace("postgres://", "postgresql+psycopg2://", 1)
+
+    # Optional: quick debug (comment out later)
+    # print(f"Using DB URI ({env_var}): {uri}", flush=True)
+
+    return create_engine(uri, pool_pre_ping=True)
 
 def payload_hash(raw: dict) -> str:
     # stable string -> stable hash
@@ -213,6 +212,7 @@ def load_stat_flags(path: str) -> dict[tuple[str, str], bool]:
     Returns {(stat_type, stat_key): include_bool}
     Supports stat_type='*' rows.
     """
+    print(f"Loading stat flags from {path}...")
     rules: dict[str, bool] = {}
     if not path:
         return rules
@@ -225,8 +225,10 @@ def load_stat_flags(path: str) -> dict[tuple[str, str], bool]:
         for row in r:
             stat_key = (row.get("stat_key") or "").strip()
             inc = (row.get("include") or "1").strip().lower() in ("1", "true", "t", "yes", "y")
-            if stat_key:
+            if inc:
                 rules[(stat_key)] = inc
+            else:
+                print(f"{stat_key} will not be included in the extract.")
     return rules
 
 def stat_allowed(rules: dict[str, bool], stat_key: str) -> bool:
@@ -394,6 +396,162 @@ ON CONFLICT (play_id, scope, athlete_id_norm, team_id_norm, stat_key) DO UPDATE 
   stat_value = EXCLUDED.stat_value,
   payload_id = EXCLUDED.payload_id;
 """
+
+def process_event(event_id: str,
+                  engine,
+                  team_map: Dict[str, int],
+                  athlete_map: Dict[str, int],
+                  stat_rules: dict[str, bool],
+                  args) -> tuple[str, int, int]:
+    """
+    Process a single event end-to-end in its own thread:
+    - its own HTTP session
+    - its own DB connection & cursor
+    """
+    s = session_with_retries()
+
+    PLAY_BATCH_SIZE = max(1, int(args.play_batch_size))
+    PART_BATCH_SIZE = max(1, int(args.participant_batch_size))
+    STAT_BATCH_SIZE = 5000
+
+    stat_batch: list[dict] = []
+    payload_cache: dict[str, int] = {}
+    participant_batch: list[Dict[str, Any]] = []
+
+    plays_processed = 0
+    parts_processed = 0
+
+    with engine.begin() as conn:
+        pg_conn = conn.connection  # psycopg2
+        with pg_conn.cursor() as cur:
+
+            def flush_stats():
+                nonlocal stat_batch
+                if not stat_batch:
+                    return
+                execute_batch(cur, UPSERT_PLAY_STAT_SQL, stat_batch, page_size=500)
+                stat_batch = []
+
+            def flush_participants():
+                nonlocal participant_batch, parts_processed
+                if not participant_batch:
+                    return
+
+                tuples = [tuple(p[c] for c in PART_COLS) for p in participant_batch]
+                execute_values(
+                    cur,
+                    PART_VALUES_SQL,
+                    tuples,
+                    template=PART_TEMPLATE,
+                    page_size=1000,
+                )
+                parts_processed += len(participant_batch)
+                participant_batch = []
+
+            def flush_plays(play_batch: list[dict], play_objs_by_espn_id: dict):
+                nonlocal plays_processed, participant_batch, stat_batch
+
+                if not play_batch:
+                    return
+
+                # upsert plays
+                execute_batch(cur, UPSERT_PLAY_SQL, play_batch, page_size=250)
+
+                espn_ids: list[str] = [str(p["espn_id"]) for p in play_batch if p.get("espn_id")]
+                if not espn_ids:
+                    return
+
+                # fetch db ids for the batch
+                cur.execute(
+                    "SELECT id, espn_id FROM public.espn_play WHERE espn_id = ANY(%s::text[]);",
+                    (espn_ids,),
+                )
+                id_map = {str(r[1]): int(r[0]) for r in cur.fetchall()}
+
+                # build participants + stats for each play
+                for eid in espn_ids:
+                    play_db_id = id_map.get(eid)
+                    pobj = play_objs_by_espn_id.get(eid)
+                    if not play_db_id or not pobj:
+                        continue
+
+                    # team for play
+                    play_team_ref = ((pobj.get("team") or {}).get("$ref")) or ""
+                    play_team_espn = espn_id_from_ref(play_team_ref)
+                    play_team_pk = team_map.get(str(play_team_espn)) if play_team_espn else None
+
+                    # participants
+                    participant_batch.extend(
+                        build_participant_rows(play_db_id, pobj, team_map, athlete_map)
+                    )
+                    if len(participant_batch) >= PART_BATCH_SIZE:
+                        flush_participants()
+
+                    # offense/defense teams
+                    off_pk, def_pk = get_off_def_team_pks(pobj, team_map)
+
+                    # stats
+                    stat_rows = build_participant_stat_rows(
+                        session=s,
+                        cur=cur,
+                        payload_cache=payload_cache,
+                        play_db_id=play_db_id,
+                        play_obj=pobj,
+                        play_team_pk=play_team_pk,
+                        offense_pk=off_pk,
+                        defense_pk=def_pk,
+                        athlete_map=athlete_map,
+                        stat_rules=stat_rules,
+                    )
+
+                    stat_batch.extend(stat_rows)
+                    if len(stat_batch) >= STAT_BATCH_SIZE:
+                        flush_stats()
+
+                plays_processed += len(play_batch)
+
+            url = plays_url(args.sport, args.league, event_id)
+            print(f"[event {event_id}] starting plays ingest", flush=True)
+
+            play_batch: list[dict] = []
+            play_objs_by_espn_id: dict[str, dict] = {}
+
+            for pref in iter_play_refs(s, url):
+                play_obj = get_json(s, pref)
+                play_row = parse_play_row(play_obj, event_id, team_map)
+                espn_id = str(play_row.get("espn_id") or "").strip()
+                if not espn_id:
+                    continue
+
+                play_batch.append(play_row)
+                play_objs_by_espn_id[espn_id] = play_obj
+
+                if len(play_batch) >= PLAY_BATCH_SIZE:
+                    flush_plays(play_batch, play_objs_by_espn_id)
+                    play_batch = []
+                    play_objs_by_espn_id = {}
+                    print(
+                        f"[event {event_id}] plays={plays_processed} "
+                        f"participants_flushed={parts_processed} "
+                        f"queued={len(participant_batch)}",
+                        flush=True,
+                    )
+
+                if args.sleep:
+                    time.sleep(args.sleep)
+
+            # flush leftovers
+            flush_plays(play_batch, play_objs_by_espn_id)
+            flush_stats()
+            flush_participants()
+
+            print(
+                f"[event {event_id}] done. "
+                f"plays_total={plays_processed} participants_total={parts_processed}",
+                flush=True,
+            )
+
+    return event_id, plays_processed, parts_processed
 
 def build_team_lookup(cur) -> Dict[str, int]:
     cur.execute("SELECT id, espn_id FROM public.espn_team WHERE espn_id IS NOT NULL;")
@@ -593,173 +751,64 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--sport", default="football")
     ap.add_argument("--league", default="nfl")
-    ap.add_argument("--sleep", type=float, default=0.0)
+    ap.add_argument("--sleep", type=float)
     ap.add_argument("--event-id", action="append", default=[])
-    ap.add_argument("--events-sql", default="")
-    ap.add_argument("--limit-events", type=int, default=0)
-    ap.add_argument("--play-batch-size", type=int, default=250)
-    ap.add_argument("--participant-batch-size", type=int, default=5000)
-    ap.add_argument("--stat-flags-csv", default=os.getenv("ESPN_STAT_FLAGS_CSV", ""))
+    ap.add_argument("--events-sql")
+    ap.add_argument("--limit-events", type=int)
+    ap.add_argument("--play-batch-size", type=int)
+    ap.add_argument("--participant-batch-size", type=int)
+    ap.add_argument("--stat-flags-csv")
+    ap.add_argument("--workers", type=int, help="Number of parallel event workers")
     args = ap.parse_args()
 
-    s = session_with_retries()
-    engine = get_engine()
+    engine = get_engine(env_var="ESPN_DB_URI")
 
-    PLAY_BATCH_SIZE = max(1, int(args.play_batch_size))
-    PART_BATCH_SIZE = max(1, int(args.participant_batch_size))
-    STAT_BATCH_SIZE = 5000
-    stat_batch: list[dict] = []
-    payload_cache: dict[str, int] = {}
-
-    # Load CSV whitelist of stats to include
+    # Load stat flags once
+    print("Loading stat flags...")
     rules = load_stat_flags(args.stat_flags_csv)
-    
 
+    # Build team/athlete maps once (single short-lived connection)
     with engine.begin() as conn:
-        pg_conn = conn.connection  # psycopg2
+        pg_conn = conn.connection
         with pg_conn.cursor() as cur:
             team_map = build_team_lookup(cur)
             athlete_map = build_athlete_lookup(cur)
 
-            # resolve events
+    # Resolve events (using a connection again)
+    with engine.begin() as conn:
+        pg_conn = conn.connection
+        with pg_conn.cursor() as cur:
             event_ids = [str(x) for x in args.event_id if str(x).strip()]
             if args.events_sql:
                 cur.execute(args.events_sql)
                 event_ids.extend([str(r[0]) for r in cur.fetchall()])
 
-            event_ids = list(dict.fromkeys(event_ids))
-            if args.limit_events and args.limit_events > 0:
-                event_ids = event_ids[: args.limit_events]
+    event_ids = list(dict.fromkeys(event_ids))
+    if args.limit_events and args.limit_events > 0:
+        event_ids = event_ids[: args.limit_events]
 
-            if not event_ids:
-                raise SystemExit("No events provided. Use --event-id ... or --events-sql ...")
+    if not event_ids:
+        raise SystemExit("No events provided. Use --event-id ... or --events-sql ...")
 
-            plays_processed = 0
-            parts_processed = 0
+    print(f"Processing {len(event_ids)} events with {args.workers} workers...", flush=True)
 
-            participant_batch: list[Dict[str, Any]] = []
+    workers = max(1, int(args.workers))
+    results = []
 
-            def flush_stats():
-                nonlocal stat_batch
-                if not stat_batch:
-                    return
-                execute_batch(cur, UPSERT_PLAY_STAT_SQL, stat_batch, page_size=500)
-                stat_batch = []
-                
-            def flush_participants():
-                nonlocal participant_batch, parts_processed
-                if not participant_batch:
-                    return
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        future_to_event = {
+            pool.submit(process_event, eid, engine, team_map, athlete_map, rules, args): eid
+            for eid in event_ids
+        }
 
-                tuples = [tuple(p[c] for c in PART_COLS) for p in participant_batch]
-                execute_values(
-                    cur,
-                    PART_VALUES_SQL,
-                    tuples,
-                    template=PART_TEMPLATE,
-                    page_size=1000,
-                )
-                parts_processed += len(participant_batch)
-                participant_batch = []
-
-            def flush_plays(play_batch: list[dict], play_objs_by_espn_id: dict):
-                nonlocal plays_processed, participant_batch, stat_batch
-
-                if not play_batch:
-                    return
-
-                # upsert plays (dict-params)
-                execute_batch(cur, UPSERT_PLAY_SQL, play_batch, page_size=250)
-
-                espn_ids: list[str] = [str(p["espn_id"]) for p in play_batch if p.get("espn_id")]
-                if not espn_ids:
-                    return
-
-                # fetch db ids for the batch
-                cur.execute(
-                    "SELECT id, espn_id FROM public.espn_play WHERE espn_id = ANY(%s::text[]);",
-                    (espn_ids,),
-                )
-                id_map = {str(r[1]): int(r[0]) for r in cur.fetchall()}
-
-                # build participants for each play
-                for espn_id in espn_ids:
-                    play_db_id = id_map.get(espn_id)
-                    pobj = play_objs_by_espn_id.get(espn_id)
-                    if not play_db_id or not pobj:
-                        continue
-
-                    # figure out play_team_pk once per play for stats
-                    play_team_ref = ((pobj.get("team") or {}).get("$ref")) or ""
-                    play_team_espn = espn_id_from_ref(play_team_ref)
-                    play_team_pk = team_map.get(str(play_team_espn)) if play_team_espn else None
-
-                    participant_batch.extend(
-                        build_participant_rows(play_db_id, pobj, team_map, athlete_map)
-                    )
-
-                    if len(participant_batch) >= PART_BATCH_SIZE:
-                        flush_participants()
-
-                    off_pk, def_pk = get_off_def_team_pks(pobj, team_map)
-                    stat_batch.extend(
-                        build_participant_stat_rows(
-                            session=s,
-                            cur=cur,
-                            payload_cache=payload_cache,
-                            play_db_id=play_db_id,
-                            play_obj=pobj,
-                            play_team_pk=play_team_pk,
-                            offense_pk=off_pk,
-                            defense_pk=def_pk,
-                            athlete_map=athlete_map,
-                            stat_rules=rules,
-                        )
-                    )
-                    if len(stat_batch) >= STAT_BATCH_SIZE:
-                        flush_stats()
-
-                plays_processed += len(play_batch)
-
-            for event_id in event_ids:
-                url = plays_url(args.sport, args.league, event_id)
-                print(f"[event {event_id}] starting plays ingest", flush=True)
-
-                play_batch: list[dict] = []
-                play_objs_by_espn_id: dict[str, dict] = {}
-
-                for pref in iter_play_refs(s, url):
-                    play_obj = get_json(s, pref)
-                    play_row = parse_play_row(play_obj, event_id, team_map)
-                    espn_id = str(play_row.get("espn_id") or "").strip()
-                    if not espn_id:
-                        continue
-
-                    play_batch.append(play_row)
-                    play_objs_by_espn_id[espn_id] = play_obj
-
-                    if len(play_batch) >= PLAY_BATCH_SIZE:
-                        flush_plays(play_batch, play_objs_by_espn_id)
-                        play_batch = []
-                        play_objs_by_espn_id = {}
-
-                        print(
-                            f"[event {event_id}] plays={plays_processed} participants_flushed={parts_processed} queued={len(participant_batch)}",
-                            flush=True,
-                        )
-
-                    if args.sleep:
-                        time.sleep(args.sleep)
-
-                # flush leftovers for this event
-                flush_plays(play_batch, play_objs_by_espn_id)
-                flush_stats()
-                flush_participants()
-
-                print(
-                    f"[event {event_id}] done. plays_total={plays_processed} participants_total={parts_processed}",
-                    flush=True,
-                )
+        for fut in as_completed(future_to_event):
+            eid = future_to_event[fut]
+            try:
+                event_id, plays, parts = fut.result()
+                print(f"[event {event_id}] COMPLETED plays={plays} participants={parts}", flush=True)
+                results.append((event_id, plays, parts))
+            except Exception as e:
+                print(f"[event {eid}] FAILED: {e}", flush=True)
 
     print("✅ finished", flush=True)
     return 0

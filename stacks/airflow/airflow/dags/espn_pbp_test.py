@@ -33,16 +33,18 @@ with DAG(
 
             python3 /opt/airflow/jobs/espn/pull_nfl_pbp.py \
             --events-sql "
-                select espn_id
-                from public.espn_event
-                where season_year = '2025'
-                and season_type = '2'
-                and week = '1'
-                order by week, espn_id
+              select espn_id
+              from public.espn_event
+              where season_year = '{{ var.value.espn_season_year | default("2025") }}'
+                and season_type = '{{ var.value.espn_season_type | default("2") }}'
+                and week BETWEEN '{{ var.value.espn_start_week | default("1") }}' AND '{{ var.value.espn_end_week | default("1") }}'
+              order by week, espn_id
+          " \
             " \
-            --play-batch-size 250 \
-            --participant-batch-size 2000 \
-            --stat-flags-csv /opt/airflow/jobs/espn/stat_key_whitelist.csv
+            --play-batch-size '{{ var.value.play_batch_size | default("250") }}' \
+            --participant-batch-size '{{ var.value.participant_batch_size | default("2000") }}' \
+            --stat-flags-csv '{{ var.value.stats_flag_csv | default("/opt/airflow/jobs/espn/stat_key_whitelist.csv") }}' \
+            --workers {{ var.value.pbp_workers | default("1") }}      
             """,
             #append_env=True,
         )

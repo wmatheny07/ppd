@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 
 from airflow import DAG
 from airflow.operators.bash import BashOperator
+from airflow.hooks.base import BaseHook
 from airflow.datasets import Dataset
 
 DEFAULT_ARGS = {
@@ -30,7 +31,7 @@ with DAG(
 ) as dag:
 
     COMMON_ENV = {
-        "ANALYTICS_DB_PASSWORD": "{{ var.value.ANALYTICS_DB_PASSWORD }}",
+        "ANALYTICS_DB_PASSWORD": "{{ conn.analytics_postgres.password }}",
         # Add any other env vars referenced by profiles.yml
     }
 

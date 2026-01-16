@@ -159,4 +159,5 @@ services:
     networks:
       - core_data_net
     restart: unless-stopped
+
   # GPU: see note

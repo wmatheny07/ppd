@@ -30,20 +30,19 @@ def session_with_retries():
     return s
 
 
-def get_engine():
-    host = os.getenv("ESPN_DB_HOST", "").strip()
-    port = os.getenv("ESPN_DB_PORT", "5432").strip()
-    db = os.getenv("ESPN_DB_NAME", "").strip()
-    user = os.getenv("ESPN_DB_USER", "").strip()
-    pwd = os.getenv("ESPN_DB_PASSWORD", "").strip()
+def get_engine(env_var: str = "ANALYTICS_DB_URI") -> "sqlalchemy.Engine":
+    uri = os.getenv(env_var, "").strip()
+    if not uri:
+        raise RuntimeError(f"Missing DB connection URI in env var {env_var}")
 
-    if not all([host, db, user, pwd]):
-        raise RuntimeError(
-            "Missing DB env vars (ESPN_DB_HOST/ESPN_DB_NAME/ESPN_DB_USER/ESPN_DB_PASSWORD)."
-        )
+    # Normalize scheme from Airflow "postgres://" to SQLAlchemy "postgresql+psycopg2://"
+    if uri.startswith("postgres://"):
+        uri = uri.replace("postgres://", "postgresql+psycopg2://", 1)
 
-    url = f"postgresql+psycopg2://{user}:{pwd}@{host}:{port}/{db}"
-    return create_engine(url, execution_options={"stream_results": True})
+    # Optional: quick debug (comment out later)
+    # print(f"Using DB URI ({env_var}): {uri}", flush=True)
+
+    return create_engine(uri, pool_pre_ping=True)
 
 
 def get_json(session, url):
@@ -193,7 +192,7 @@ def main():
     ap.add_argument("--league-id", type=int, default=0, help="Optional: override espn_league.id lookup")
     args = ap.parse_args()
 
-    engine = get_engine()
+    engine = get_engine(env_var="ESPN_DB_URI")
     session = session_with_retries()
 
     rows = []

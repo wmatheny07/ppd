@@ -225,24 +225,19 @@ def safe_ident(name: str) -> str:
         raise ValueError(f"Invalid identifier: {name!r}")
     return name
 
+def get_engine(env_var: str = "ANALYTICS_DB_URI") -> "sqlalchemy.Engine":
+    uri = os.getenv(env_var, "").strip()
+    if not uri:
+        raise RuntimeError(f"Missing DB connection URI in env var {env_var}")
 
-def get_engine() -> "sqlalchemy.Engine":
-    """
-    Prefers explicit DB_* env vars.
-    (You can keep your Airflow-conn approach too, but env is simplest for BashOperator.)
-    """
-    host = os.getenv("DB_HOST", "").strip()
-    port = os.getenv("DB_PORT", "5432").strip()
-    db = os.getenv("DB_NAME", "").strip()
-    user = os.getenv("DB_USER", "").strip()
-    pwd = os.getenv("DB_PASSWORD", "").strip()
+    # Normalize scheme from Airflow "postgres://" to SQLAlchemy "postgresql+psycopg2://"
+    if uri.startswith("postgres://"):
+        uri = uri.replace("postgres://", "postgresql+psycopg2://", 1)
 
-    if not all([host, db, user, pwd]):
-        raise RuntimeError("Missing DB env vars (DB_HOST/DB_NAME/DB_USER/DB_PASSWORD).")
+    # Optional: quick debug (comment out later)
+    # print(f"Using DB URI ({env_var}): {uri}", flush=True)
 
-    url = f"postgresql+psycopg2://{user}:{pwd}@{host}:{port}/{db}"
-    return create_engine(url, pool_pre_ping=True)
-
+    return create_engine(uri, pool_pre_ping=True)
 
 def ensure_schema(engine, schema: str):
     schema = safe_ident(schema)

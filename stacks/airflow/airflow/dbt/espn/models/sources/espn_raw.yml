@@ -23,3 +23,6 @@ sources:
 
   - name: espn_play_stat
     description: "Stats from each play"
+
+  - name: espn_stat_payload
+    description: "JSON payload for stats"

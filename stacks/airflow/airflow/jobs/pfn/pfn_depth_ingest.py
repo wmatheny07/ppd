@@ -29,29 +29,19 @@ def _clean_text(s: str) -> str:
 import os
 from sqlalchemy import create_engine
 
-def get_engine(conn_id: str | None = None):
-    # 1) ENV FIRST (works everywhere)
-    host = os.getenv("DB_HOST")
-    port = os.getenv("DB_PORT", "5432")
-    db   = os.getenv("DB_NAME")
-    user = os.getenv("DB_USER")
-    pwd  = os.getenv("DB_PASSWORD")
+def get_engine(env_var: str = "ANALYTICS_DB_URI") -> "sqlalchemy.Engine":
+    uri = os.getenv(env_var, "").strip()
+    if not uri:
+        raise RuntimeError(f"Missing DB connection URI in env var {env_var}")
 
-    if host and db and user and pwd is not None:
-        url = f"postgresql+psycopg2://{user}:{pwd}@{host}:{port}/{db}"
-        return create_engine(url, pool_pre_ping=True)
+    # Normalize scheme from Airflow "postgres://" to SQLAlchemy "postgresql+psycopg2://"
+    if uri.startswith("postgres://"):
+        uri = uri.replace("postgres://", "postgresql+psycopg2://", 1)
 
-    # 2) Optional: Airflow conn lookup (only if running in a real Airflow context)
-    if conn_id:
-        try:
-            from airflow.hooks.base import BaseHook
-            c = BaseHook.get_connection(conn_id)
-            url = c.get_uri().replace("postgres://", "postgresql+psycopg2://")
-            return create_engine(url, pool_pre_ping=True)
-        except Exception as e:
-            print(f"[pfn-ingest] Airflow conn lookup failed ({conn_id}): {e!r}")
+    # Optional: quick debug (comment out later)
+    # print(f"Using DB URI ({env_var}): {uri}", flush=True)
 
-    raise RuntimeError("Missing DB env vars (DB_HOST/DB_NAME/DB_USER/DB_PASSWORD).")
+    return create_engine(uri, pool_pre_ping=True)
 
 def ensure_schema_and_table(engine, schema: str):
     schema = schema.strip()
@@ -151,8 +141,7 @@ def upsert_depth(engine, schema: str, df: pd.DataFrame):
         conn.execute(text(f'DROP TABLE IF EXISTS "{schema}"."{tmp}";'))
 
 def main():
-    conn_id = os.getenv("AIRFLOW_CONN_ID") or os.getenv("AIRFLOW_CONN") or os.getenv("CONN_ID")
-    engine = get_engine(conn_id)
+    engine = get_engine()
     schema  = os.getenv("DEPTH_SCHEMA", "nfl_dfs").strip()
     source  = os.getenv("DEPTH_SOURCE", "pfn").strip()
     url     = os.getenv("DEPTH_URL", URL_DEFAULT).strip()

@@ -33,22 +33,20 @@ def session_with_retries():
     )
     return s
 
-def get_engine() -> "sqlalchemy.Engine":
-    """
-    Prefers explicit DB_* env vars.
-    (You can keep your Airflow-conn approach too, but env is simplest for BashOperator.)
-    """
-    host = os.getenv("ESPN_DB_HOST", "").strip()
-    port = os.getenv("ESPN_DB_PORT", "5432").strip()
-    db = os.getenv("ESPN_DB_NAME", "").strip()
-    user = os.getenv("ESPN_DB_USER", "").strip()
-    pwd = os.getenv("ESPN_DB_PASSWORD", "").strip()
 
-    if not all([host, db, user, pwd]):
-        raise RuntimeError("Missing DB env vars (DB_HOST/DB_NAME/DB_USER/DB_PASSWORD).")
+def get_engine(env_var: str = "ANALYTICS_DB_URI") -> "sqlalchemy.Engine":
+    uri = os.getenv(env_var, "").strip()
+    if not uri:
+        raise RuntimeError(f"Missing DB connection URI in env var {env_var}")
 
-    url = f"postgresql+psycopg2://{user}:{pwd}@{host}:{port}/{db}"
-    return create_engine(url,execution_options={"stream_results": True})
+    # Normalize scheme from Airflow "postgres://" to SQLAlchemy "postgresql+psycopg2://"
+    if uri.startswith("postgres://"):
+        uri = uri.replace("postgres://", "postgresql+psycopg2://", 1)
+
+    # Optional: quick debug (comment out later)
+    # print(f"Using DB URI ({env_var}): {uri}", flush=True)
+
+    return create_engine(uri, pool_pre_ping=True)
 
 
 def athletes_index_url(season: int, page: int):
@@ -134,7 +132,7 @@ def main():
     ap.add_argument("--season", type=int, required=True)
     ap.add_argument("--sleep", type=float, default=0.1)
     args = ap.parse_args()
-    engine = get_engine()
+    engine = get_engine(env_var="ESPN_DB_URI")
 
     session = session_with_retries()
     page = 1

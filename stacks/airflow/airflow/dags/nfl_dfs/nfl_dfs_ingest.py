@@ -14,7 +14,9 @@ DEFAULT_ARGS = {
 }
 
 DFS_INGESTED = Dataset("dataset://dfs/ingested")
-
+COMMON_ENV = {
+    "ANALYTICS_DB_URI" : "{{ conn.analytics_postgres.get_uri() }}"
+}
 with DAG(
     dag_id="nfl_dfs_ingest",
     description="Ingest DK + depth + injuries then build active player pool",
@@ -43,6 +45,7 @@ with DAG(
             "DEPTH_SCHEMA": "{{ var.value.get('NFL_DFS_SCHEMA', 'nfl_dfs') }}",
             "DEPTH_SOURCE": "pfn",
             "DEPTH_URL": "https://www.profootballnetwork.com/nfl/depth-chart/",
+            "ANALYTICS_DB_URI": "{{ conn.analytics_postgres.get_uri() }}"
         },
         append_env=True,
     )
@@ -59,12 +62,9 @@ with DAG(
             "DK_ARCHIVE": "{{ var.value.get('DK_ARCHIVE', '/data/archive') }}",
             "DK_ERROR": "{{ var.value.get('DK_ERROR', '/data/error') }}",
             "DK_POLL_SECONDS": "{{ var.value.get('DK_POLL_SECONDS', '60') }}",
-            "DB_HOST": "{{ var.value.get('DB_HOST', 'postgres') }}",
-            "DB_PORT": "{{ var.value.get('DB_PORT', '5432') }}",
-            "DB_NAME": "{{ var.value.get('DB_NAME', 'analytics') }}",
-            "DB_USER": "{{ var.value.get('DB_USER', 'analytics') }}",
-            "DB_PASSWORD": "{{ var.value.get('DB_PASSWORD', '') }}",
+            "ANALYTICS_DB_URI": "{{ conn.analytics_postgres.get_uri() }}",
         },
+        append_env=True
     )
 
     espn_injury_rpt_ingest = BashOperator(
@@ -73,6 +73,8 @@ with DAG(
         set -euo pipefail
         python3 /opt/airflow/jobs/espn/espn_injury_report.py
         """,
+        env=COMMON_ENV,
+        append_env=True,
     )
 
     build_player_pool = PostgresOperator(

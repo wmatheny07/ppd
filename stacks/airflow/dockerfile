@@ -1,42 +1,33 @@
 FROM apache/airflow:2.10.2-python3.11
 
-# 1) System packages as root
+# Switch to root for OS deps (if needed)
 USER root
 
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    libpq-dev \
-    git \
-  && rm -rf /var/lib/apt/lists/*
+# Optional: system deps needed for some libs (dbt / ML tools)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        build-essential \
+        git \
+        libpq-dev \
+        graphviz \
+        # add others if you hit build errors
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# 2) Python packages as 'airflow' user (required by Airflow image)
+# Back to airflow user
 USER airflow
 
-FROM apache/airflow:2.10.2-python3.11
+# Copy requirements for ML / dbt extras
+COPY requirements-ml-dbt.txt /tmp/requirements-ml-dbt.txt
 
-USER root
+# Install extras with Airflow constraints to avoid dependency hell
+# 1) Install Airflow with official constraints
+RUN pip install "apache-airflow[celery,postgres,redis]==2.10.2" \
+    --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.10.2/constraints-3.11.txt"
 
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    libpq-dev \
-    git \
-    curl \
-    netcat-openbsd \
-  && rm -rf /var/lib/apt/lists/*
+# 2) Install dbt + ML tooling WITHOUT the Airflow constraint
+COPY requirements-ml-dbt.txt /tmp/requirements-ml-dbt.txt
+RUN pip install --no-cache-dir -r /tmp/requirements-ml-dbt.txt
 
-USER airflow
-
-RUN pip install --no-cache-dir \
-    dbt-core \
-    dbt-postgres \
-    great-expectations \
-    mlflow \
-    pandas \
-    scikit-learn \
-    psycopg2-binary \
-    sqlalchemy \
-    requests \
-    beautifulsoup4 \
-    lxml
-
-WORKDIR /opt/airflow
+# If you want, you can bake in DAGs/plugins, but most people mount them instead:
+# COPY dags /opt/airflow/dags
+# COPY plugins /opt/airflow/plugins

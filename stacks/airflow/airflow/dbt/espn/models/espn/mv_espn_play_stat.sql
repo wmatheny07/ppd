@@ -19,7 +19,7 @@ with base as (
     ps.stat_type,
     ps.stat_key,
     ps.stat_value,
-    ps.raw_data as stat_payload,
+    esp.payload as stat_payload,
     case
       when p.offense_team_id = ps.team_id then 'offense'
       else 'defense'
@@ -37,6 +37,8 @@ with base as (
   from {{ source('espn', 'espn_play_stat') }} ps
   join {{ source('espn', 'espn_play') }} p
     on ps.play_id = p.id
+  join {{ source('espn', 'espn_stat_payload') }} esp 
+    on ps.payload_id = esp.id
 ),
 enriched as (
   select

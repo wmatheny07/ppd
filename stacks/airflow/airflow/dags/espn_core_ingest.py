@@ -15,7 +15,10 @@ DEFAULT_ARGS = {
 
 # Airflow Dataset markers (logical “this data is fresh” signals)
 ESPN_INGESTED = Dataset("dataset://espn/ingested")
-
+COMMON_ENV = {
+    "ANALYTICS_DB_URI": "{{ conn.analytics_postgres.get_uri() }}",
+    "ESPN_DB_URI": "{{ conn.espn_postgres.get_uri() }}",
+}
 with DAG(
     dag_id="espn_core_ingest",
     description="ESPN core ingest: events -> athletes -> play-by-play",
@@ -34,10 +37,11 @@ with DAG(
             bash_command="""
             set -euo pipefail
             python3 /opt/airflow/jobs/espn/pull_nfl_events.py \
-              --season {{ var.value.get('ESPN_SEASON', '2025') }} \
-              --week-start {{ var.value.get('ESPN_WEEK_START', '1') }} \
-              --week-end {{ var.value.get('ESPN_WEEK_END', '18') }}
+              --season '{{ var.value.espn_season_year | default("2025") }}' \
+              --week-start '{{ var.value.espn_week_start | default("1") }}' \
+              --week-end '{{ var.value.espn_week_end | default("1") }}'
             """,
+            env=COMMON_ENV,
             append_env=True,
         )
 
@@ -46,8 +50,9 @@ with DAG(
             bash_command="""
             set -euo pipefail
             python3 -u /opt/airflow/jobs/espn/pull_nfl_athletes.py \
-            --season {{ var.value.get('ESPN_SEASON', '2025') }}
+            --season '{{ var.value.espn_season_year | default("2025") }}'
             """,
+            env=COMMON_ENV,
             append_env=True,
         )
 
@@ -57,18 +62,21 @@ with DAG(
             set -euo pipefail
 
             python3 /opt/airflow/jobs/espn/pull_nfl_pbp.py \
-            --events-sql "
-                select espn_id
-                from public.espn_event
-                where season_year = {{ var.value.get('ESPN_SEASON', '2025') }}
-                and season_type = {{ var.value.get('ESPN_SEASON_TYPE', '2') }}
-                and week between {{ var.value.get('ESPN_WEEK_START', '1') }} and {{ var.value.get('ESPN_WEEK_END', '18') }}
-                order by week, espn_id
-            " \
-            --play-batch-size 250 \
-            --participant-batch-size 2000
+            --events-sql " \
+              select espn_id \
+              from public.espn_event \
+              where season_year = '{{ var.value.espn_season_year | default("2025") }}' \
+                and season_type = '{{ var.value.espn_season_type | default("2") }}' \
+                and week BETWEEN '{{ var.value.espn_week_start | default("1") }}' AND '{{ var.value.espn_week_end | default("1") }}' \
+              order by week, espn_id \
+          " \
+            --play-batch-size '{{ var.value.play_batch_size | default("250") }}' \
+            --participant-batch-size '{{ var.value.participant_batch_size | default("2000") }}' \
+            --stat-flags-csv '{{ var.value.stats_flag_csv | default("/opt/airflow/jobs/espn/stat_key_whitelist.csv") }}' \
+            --workers '{{ var.value.pbp_workers | default("2") }}'      
             """,
-            append_env=True,
+            env=COMMON_ENV,
+            append_env=True
         )
 
         pull_events >> pull_athletes >> pull_pbp

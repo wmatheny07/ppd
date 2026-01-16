@@ -15,7 +15,7 @@ with src as (
     nullif(a.position,'')::text  as position,
     sequence_number             as participant_order,
     nullif(stat_type,'')::text         as stat_type,        -- '0'/'1' or whatever you store
-    ps.raw_data::jsonb                as stat_payload,
+    esp.payload::jsonb                as stat_payload,
     p.created_at,
     p.updated_at
   from {{ source('espn','espn_play_stat') }} ps
@@ -23,6 +23,8 @@ with src as (
     on ps.play_id = p.id
   join {{ source('espn','espn_athlete') }} a
     on ps.athlete_id = a.id
+    join {{ source('espn','espn_stat_payload') }} esp
+    on ps.payload_id = esp.id
   where scope = 'participant'
 )
 select * from src

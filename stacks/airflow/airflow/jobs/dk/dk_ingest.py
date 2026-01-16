@@ -16,12 +16,6 @@ ARCHIVE = Path(os.getenv("DK_ARCHIVE", "/data/archive"))
 ERROR = Path(os.getenv("DK_ERROR", "/data/error"))
 POLL_SECONDS = int(os.getenv("DK_POLL_SECONDS", "60"))
 
-DB_HOST = os.getenv("DB_HOST", "postgres")
-DB_PORT = os.getenv("DB_PORT", "5432")
-DB_NAME = os.getenv("DB_NAME", "analytics")
-DB_USER = os.getenv("DB_USER", "analytics")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "")
-
 # ✅ schema per project
 DK_SCHEMA = os.getenv("DK_SCHEMA", "public").strip()
 
@@ -102,9 +96,19 @@ def safe_ident(name: str) -> str:
         raise ValueError(f"Invalid identifier: {name!r}")
     return name
 
-def db_engine():
-    url = f"postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-    return create_engine(url, pool_pre_ping=True)
+def get_engine(env_var: str = "ANALYTICS_DB_URI") -> "sqlalchemy.Engine":
+    uri = os.getenv(env_var, "").strip()
+    if not uri:
+        raise RuntimeError(f"Missing DB connection URI in env var {env_var}")
+
+    # Normalize scheme from Airflow "postgres://" to SQLAlchemy "postgresql+psycopg2://"
+    if uri.startswith("postgres://"):
+        uri = uri.replace("postgres://", "postgresql+psycopg2://", 1)
+
+    # Optional: quick debug (comment out later)
+    # print(f"Using DB URI ({env_var}): {uri}", flush=True)
+
+    return create_engine(uri, pool_pre_ping=True)
 
 def ensure_schema(engine, schema: str):
     schema = safe_ident(schema)
@@ -315,10 +319,10 @@ def main():
     ARCHIVE.mkdir(parents=True, exist_ok=True)
     ERROR.mkdir(parents=True, exist_ok=True)
 
-    engine = db_engine()
+    engine = get_engine()
 
     mode = "once" if once else f"poll={poll_seconds}s"
-    print(f"[dk-ingest] schema={DK_SCHEMA} db={DB_NAME} watching {INBOX} (mode={mode})")
+    print(f"[dk-ingest] schema={DK_SCHEMA} watching {INBOX} (mode={mode})")
 
     if once:
         n = process_available_files(engine)
