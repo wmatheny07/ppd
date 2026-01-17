@@ -9,9 +9,14 @@ RUN apt-get update && \
         build-essential \
         git \
         libpq-dev \
+        postgresql-client \
         graphviz \
         # add others if you hit build errors
     && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Wait-for-Postgres wrapper
+COPY wait-for-db.sh /opt/airflow/wait-for-db.sh
+RUN chmod +x /opt/airflow/wait-for-db.sh
 
 # Back to airflow user
 USER airflow
@@ -31,3 +36,5 @@ RUN pip install --no-cache-dir -r /tmp/requirements-ml-dbt.txt
 # If you want, you can bake in DAGs/plugins, but most people mount them instead:
 # COPY dags /opt/airflow/dags
 # COPY plugins /opt/airflow/plugins
+
+ENTRYPOINT ["/opt/airflow/wait-for-db.sh"]
