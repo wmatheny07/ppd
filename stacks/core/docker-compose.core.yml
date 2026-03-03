@@ -73,8 +73,10 @@ services:
       SQLALCHEMY_DATABASE_URI: postgresql+psycopg2://analytics:${ANALYTICS_DB_PASSWORD}@postgres:5432/superset
       ENABLE_PROXY_FIX: "true"
       SUPERSET_WEBSERVER_BASEURL: "https://superset.peakprecisiondata.com"
+      SUPERSET_CONFIG_PATH: /app/pythonpath/config/superset_config.py
     volumes:
       - ./superset_home:/app/superset_home
+      - ./superset/config/superset_config.py:/app/pythonpath/config/superset_config.py:ro
     depends_on:
       - postgres
     networks:
