@@ -1,5 +1,9 @@
 # superset_config.py
 
+# ===== Custom Units for Big Number Charts =====
+# Commenting out as this was unsuccessful and caused issues on the front end
+#CURRENCIES = ["$", "€", "£", "bpm", "lbs", "steps", "hrs", "mi", "cal", "oz", "hrs", "kWh", "miles", "km", "gallons", "liters", "units", "items", "points"]
+
 THEME_DEFAULT = {
   "token": {
     "fontFamily": "'Inter', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial",

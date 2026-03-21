@@ -76,7 +76,7 @@ services:
       SUPERSET_CONFIG_PATH: /app/pythonpath/config/superset_config.py
     volumes:
       - ./superset_home:/app/superset_home
-      - ./superset/config/superset_config.py:/app/pythonpath/config/superset_config.py:ro
+      - /opt/ppd/stacks/superset/config/superset_config.py:/app/pythonpath/config/superset_config.py:ro
     depends_on:
       - postgres
     networks:
