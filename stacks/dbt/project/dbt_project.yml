@@ -1,11 +1,16 @@
-name: "customer360"
+name: "analytics"
 version: "1.0.0"
 config-version: 2
 
-profile: "analytics_postgres"
+profile: "analytics_marts"
 
 model-paths: [ "models" ]
 
 models:
-  customer360:
-    +materialized: view
+  analytics:
+    staging:
+      +materialized: view
+      +schema: staging
+    marts:
+      +materialized: table
+      +schema: marts

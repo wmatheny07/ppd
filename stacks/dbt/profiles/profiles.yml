@@ -1,4 +1,4 @@
-analytics:
+analytics_marts:
   target: prod
   outputs:
     prod:
@@ -8,5 +8,17 @@ analytics:
       password: "{{ env_var('ANALYTICS_DB_PASSWORD') }}"
       port: 5432
       dbname: analytics
-      schema: analytics
+      schema: marts
+      threads: 4
+analytics_staging:
+  target: prod
+  outputs:
+    prod:
+      type: postgres
+      host: postgres
+      user: analytics
+      password: "{{ env_var('ANALYTICS_DB_PASSWORD') }}"
+      port: 5432
+      dbname: analytics
+      schema: staging
       threads: 4

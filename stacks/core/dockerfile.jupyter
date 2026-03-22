@@ -2,7 +2,7 @@ FROM pytorch/pytorch:2.3.1-cuda11.8-cudnn8-runtime
 
 RUN pip install --no-cache-dir \
   jupyterlab mlflow qdrant-client transformers sentence-transformers \
-  scikit-learn xgboost tensorflow
+  scikit-learn xgboost tensorflow boto3 duckdb
 
 WORKDIR /workspace
 EXPOSE 8888

@@ -1,7 +1,7 @@
 {{ config(
-    materialized='materialized_view',
-    schema='analytics',          -- change if you use a different schema
-    unique_key='play_stat_pk',   -- optional; doesn't control MV, but helps consistency
+    materialized='table',
+    schema='analytics',
+    unique_key='play_stat_pk',
     indexes=[
       {'columns': ['event_id', 'play_id']},
       {'columns': ['athlete_id']},

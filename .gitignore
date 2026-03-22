@@ -34,6 +34,7 @@ stacks/airflow/airflow/*.pid
 # data
 *.csv
 *.txt
+*.json
 
 # Superset
 **/site-packages/
