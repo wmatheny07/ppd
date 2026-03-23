@@ -1,5 +1,6 @@
 models:
 - name: vw_workouts
+  description: "Staging view of workout sessions extracted from Apple Health JSON, including workout type, duration, and per-person attribution."
   columns:
   - name: id
     tests: [ not_null]
@@ -11,13 +12,27 @@ models:
     tests: [ not_null ]
 
 - name: vw_heart_rate_data
+  description: "Staging view of heart rate samples by date and person, sourced from Apple Health metrics data."
   columns:
   - name: date
     tests: [ not_null ]
   - name: person
     tests: [ not_null ]
 
+- name: vw_heart_rate_recovery
+  description: "Staging view of post-workout heart rate recovery data, including average and max recovery values per workout session."
+
+- name: vw_hr_metrics
+  description: "Staging view of daily heart rate metrics (min, max, avg) per person and data source from Apple Health."
+
+- name: vw_hr_variability_metrics
+  description: "Staging view of daily heart rate variability (HRV) measurements per person from Apple Health."
+
+- name: vw_resting_hr_metrics
+  description: "Staging view of daily resting heart rate readings per person from Apple Health."
+
 - name: vw_sleep_metrics
+  description: "Staging view of nightly sleep metrics including REM, core, deep, and awake durations per person from Apple Health."
   columns:
   - name: record_date
     tests: [ not_null ]
@@ -28,3 +43,36 @@ models:
     - dbt_utils.accepted_range:
         min_value: 0
         max_value: 1440 # 24hrs in minutes
+
+- name: vw_active_energy
+  description: "Staging view of active energy burn records at the interval level, used for aggregation into energy summary marts."
+
+- name: vw_active_energy_burned
+  description: "Staging view of active energy burned per workout session extracted from Apple Health workout JSON."
+
+- name: vw_active_energy_metrics
+  description: "Staging view of daily active energy metrics (calories) per person and data source from Apple Health."
+
+- name: vw_basal_energy_metrics
+  description: "Staging view of daily basal metabolic energy expenditure per person from Apple Health."
+
+- name: vw_distance_metrics
+  description: "Staging view of daily distance traveled (walking/running) per person and data source from Apple Health."
+
+- name: vw_physical_effort_metrics
+  description: "Staging view of daily physical effort scores per person from Apple Health."
+
+- name: vw_routes
+  description: "Staging view of GPS route data per workout, including speed, altitude, and coordinates from Apple Health."
+
+- name: vw_step_count_metrics
+  description: "Staging view of daily step count totals per person and data source from Apple Health."
+
+- name: vw_walking_and_running_distance
+  description: "Staging view of walking and running distance per workout interval extracted from Apple Health workout JSON."
+
+- name: vw_walking_speed_metrics
+  description: "Staging view of daily average walking speed per person from Apple Health."
+
+- name: vw_walking_step_metrics
+  description: "Staging view of daily walking step length metrics per person from Apple Health."

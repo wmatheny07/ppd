@@ -8,12 +8,20 @@ model-paths: [ "models" ]
 
 models:
   analytics:
+    +meta:
+      owner: "analytics"
+      description: "Analytics models for health data"
+      release: "1.0.0"
     staging:
+      espn_raw:
+        +enable: false
       +materialized: view
       +schema: staging
       # +grants:
       #   select: [ 'metabase', 'superset', 'wes' ]
     marts:
+      espn_raw:
+        +enable: false
       +materialized: table
       +schema: marts
       # +grants:

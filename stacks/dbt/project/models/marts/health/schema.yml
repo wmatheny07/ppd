@@ -1,5 +1,6 @@
 models:
 - name: fct_workout_summary
+  description: "Mart table summarizing completed workout sessions per person, including duration, distance, and calories burned per minute."
   columns:
   - name: person
     tests: [ not_null ]
@@ -18,6 +19,7 @@ models:
         max_value: 100
 
 - name: fct_hr_zones
+  description: "Incremental mart classifying workout heart rate data into training zones (Recovery, Fat Burn, Cardio, Threshold, Peak) based on age-adjusted max HR."
   columns:
   - name: record_date
     tests: [ not_null ]
@@ -34,6 +36,7 @@ models:
         min_value: 0
 
 - name: fct_dim_sleep
+  description: "Incremental mart breaking nightly sleep into dimensional rows by sleep type (REM, core, deep, awake) per person and date."
   columns:
   - name: record_date
     tests: [ not_null ]
@@ -50,6 +53,7 @@ models:
         min_value: 0
 
 - name: fct_sleep_metrics
+  description: "Incremental mart of nightly sleep metrics per person, including total sleep duration and breakdown by REM, core, deep, and awake stages."
   columns:
   - name: record_date
     tests: [ not_null ]
@@ -61,6 +65,7 @@ models:
         min_value: 0
 
 - name: fct_sleep_calories
+  description: "Incremental mart joining nightly sleep metrics with same-day calorie burn totals, enabling analysis of the relationship between sleep quality and energy expenditure."
   columns:
   - name: record_date
     tests: [ not_null ]
@@ -78,3 +83,9 @@ models:
     tests:
     - dbt_utils.accepted_range:
         min_value: 0
+
+- name: fct_active_energy_summary
+  description: "Incremental mart aggregating active calorie burn per workout session per person, with start/end timestamps and total calories by data source."
+
+- name: fct_workout_time_adj
+  description: "Incremental mart of time-adjusted workout records, filtering outlier sessions based on heart rate percent difference from prior sessions."
