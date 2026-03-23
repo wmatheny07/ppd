@@ -17,13 +17,11 @@ services:
       POSTGRES_USER: analytics
       POSTGRES_PASSWORD: ${ANALYTICS_DB_PASSWORD}
       POSTGRES_DB: analytics
-    command:
-      - "postgres"
-      - "-c"
-      - "wal_level=logical"
+    command: [ "postgres", "-c", "config_file=/etc/postgresql/postgres.conf" ]
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d
+      - ./postgres/postgres.conf:/etc/postgresql/postgres.conf:ro
     ports:
       - "5432:5432"
     networks:
