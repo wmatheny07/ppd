@@ -1,0 +1,177 @@
+2026-03-23 14:13:57,962 — monitor.dbt_runner — INFO — Running dbt --log-format json run-operation get_test_results --project-dir /home/airflow/.local/lib/python3.11/site-packages/monitor/dbt_project --profiles-dir /opt/airflow/.dbt (this might take a while)
+2026-03-23 14:13:59,831 — monitor.dbt_runner — INFO — Running dbt --log-format json run-operation get_models --project-dir /home/airflow/.local/lib/python3.11/site-packages/monitor/dbt_project --profiles-dir /opt/airflow/.dbt (this might take a while)
+2026-03-23 14:14:01,727 — monitor.dbt_runner — INFO — Running dbt --log-format json run-operation get_sources --project-dir /home/airflow/.local/lib/python3.11/site-packages/monitor/dbt_project --profiles-dir /opt/airflow/.dbt (this might take a while)
+2026-03-23 14:14:24,999 — monitor.dbt_runner — INFO — Running dbt --log-format json run-operation get_test_results --project-dir /home/airflow/.local/lib/python3.11/site-packages/monitor/dbt_project --profiles-dir /opt/airflow/.dbt (this might take a while)
+2026-03-23 14:14:26,898 — monitor.dbt_runner — INFO — Running dbt --log-format json run-operation get_models --project-dir /home/airflow/.local/lib/python3.11/site-packages/monitor/dbt_project --profiles-dir /opt/airflow/.dbt (this might take a while)
+2026-03-23 14:14:28,775 — monitor.dbt_runner — INFO — Running dbt --log-format json run-operation get_sources --project-dir /home/airflow/.local/lib/python3.11/site-packages/monitor/dbt_project --profiles-dir /opt/airflow/.dbt (this might take a while)
+2026-03-23 14:14:37,902 — monitor.dbt_runner — INFO — Running dbt --log-format json run-operation get_test_results --project-dir /home/airflow/.local/lib/python3.11/site-packages/monitor/dbt_project --profiles-dir /opt/airflow/.dbt (this might take a while)
+2026-03-23 14:14:39,809 — monitor.dbt_runner — INFO — Running dbt --log-format json run-operation get_models --project-dir /home/airflow/.local/lib/python3.11/site-packages/monitor/dbt_project --profiles-dir /opt/airflow/.dbt (this might take a while)
+2026-03-23 14:14:41,708 — monitor.dbt_runner — INFO — Running dbt --log-format json run-operation get_sources --project-dir /home/airflow/.local/lib/python3.11/site-packages/monitor/dbt_project --profiles-dir /opt/airflow/.dbt (this might take a while)
+2026-03-23 14:34:37,012 — monitor.dbt_runner — INFO — Running dbt --log-format json run-operation get_test_results --project-dir /home/airflow/.local/lib/python3.11/site-packages/monitor/dbt_project --profiles-dir /opt/airflow/.dbt (this might take a while)
+2026-03-23 14:35:10,590 — monitor.test_result — ERROR — Failed parsing test result - {"id": "5098e274-5a88-48c9-87db-a298664b8d98.test.analytics.accepted_values_fct_dim_sleep_sleep_type__rem__core__deep__awake.12a5c7a6a6", "model_unique_id": "model.analytics.fct_dim_sleep", "test_unique_id": "test.analytics.accepted_values_fct_dim_sleep_sleep_type__rem__core__deep__awake.12a5c7a6a6", "detected_at": "2026-03-23T14:25:18", "database_name": "analytics", "schema_name": "marts", "table_name": "fct_dim_sleep", "column_name": "sleep_type", "test_type": "dbt_test", "test_sub_type": "generic", "test_results_description": null, "owners": "[]", "tags": "[]", "test_results_query": "\n    \n    \n\nwith all_values as (\n\n    select\n        sleep_type as value_field,\n        count(*) as n_records\n\n    from \"analytics\".\"marts\".\"fct_dim_sleep\"\n    group by sleep_type\n\n)\n\nselect *\nfrom all_values\nwhere value_field not in (\n    'rem','core','deep','awake'\n)\n\n\n", "other": null, "test_name": "accepted_values_fct_dim_sleep_sleep_type__rem__core__deep__awake", "test_params": "{\"values\": [\"rem\", \"core\", \"deep\", \"awake\"], \"column_name\": \"sleep_type\", \"model\": \"{{ get_where_subquery(ref('fct_dim_sleep')) }}\"}", "severity": "ERROR", "status": "pass", "test_rows_sample": []}
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 24, in create_test_result_from_dict
+    return DbtTestResult(**test_result_dict)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 105, in __init__
+    self.test_display_name = self.display_name(test_name)
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 72, in display_name
+    return ' '.join([word[0].upper() + word[1:] for word in str_value.split('_')])
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 72, in <listcomp>
+    return ' '.join([word[0].upper() + word[1:] for word in str_value.split('_')])
+                     ~~~~^^^
+IndexError: string index out of range
+2026-03-23 14:35:10,590 — monitor.test_result — ERROR — Failed parsing test result - {"id": "5098e274-5a88-48c9-87db-a298664b8d98.test.analytics.dbt_utils_accepted_range_fct_dim_sleep_sleep_duration__0.d66313b1a4", "model_unique_id": "model.analytics.fct_dim_sleep", "test_unique_id": "test.analytics.dbt_utils_accepted_range_fct_dim_sleep_sleep_duration__0.d66313b1a4", "detected_at": "2026-03-23T14:25:18", "database_name": "analytics", "schema_name": "marts", "table_name": "fct_dim_sleep", "column_name": "sleep_duration", "test_type": "dbt_test", "test_sub_type": "generic", "test_results_description": null, "owners": "[]", "tags": "[]", "test_results_query": "\n\nwith meet_condition as(\n  select *\n  from \"analytics\".\"marts\".\"fct_dim_sleep\"\n),\n\nvalidation_errors as (\n  select *\n  from meet_condition\n  where\n    -- never true, defaults to an empty result set. Exists to ensure any combo of the `or` clauses below succeeds\n    1 = 2\n    -- records with a value >= min_value are permitted. The `not` flips this to find records that don't meet the rule.\n    or not sleep_duration >= 0\n)\n\nselect *\nfrom validation_errors\n\n", "other": null, "test_name": "dbt_utils_accepted_range_fct_dim_sleep_sleep_duration__0", "test_params": "{\"min_value\": 0, \"column_name\": \"sleep_duration\", \"model\": \"{{ get_where_subquery(ref('fct_dim_sleep')) }}\"}", "severity": "ERROR", "status": "pass", "test_rows_sample": []}
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 24, in create_test_result_from_dict
+    return DbtTestResult(**test_result_dict)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 105, in __init__
+    self.test_display_name = self.display_name(test_name)
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 72, in display_name
+    return ' '.join([word[0].upper() + word[1:] for word in str_value.split('_')])
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 72, in <listcomp>
+    return ' '.join([word[0].upper() + word[1:] for word in str_value.split('_')])
+                     ~~~~^^^
+IndexError: string index out of range
+2026-03-23 14:35:10,591 — monitor.test_result — ERROR — Failed parsing test result - {"id": "5098e274-5a88-48c9-87db-a298664b8d98.test.analytics.accepted_values_fct_hr_zones_hr_zone__Recovery__Fat_Burn__Cardio__Threshold__Peak__Unknown.a4edca89c2", "model_unique_id": "model.analytics.fct_hr_zones", "test_unique_id": "test.analytics.accepted_values_fct_hr_zones_hr_zone__Recovery__Fat_Burn__Cardio__Threshold__Peak__Unknown.a4edca89c2", "detected_at": "2026-03-23T14:25:18", "database_name": "analytics", "schema_name": "marts", "table_name": "fct_hr_zones", "column_name": "hr_zone", "test_type": "dbt_test", "test_sub_type": "generic", "test_results_description": null, "owners": "[]", "tags": "[]", "test_results_query": "\n    \n    \n\nwith all_values as (\n\n    select\n        hr_zone as value_field,\n        count(*) as n_records\n\n    from \"analytics\".\"marts\".\"fct_hr_zones\"\n    group by hr_zone\n\n)\n\nselect *\nfrom all_values\nwhere value_field not in (\n    'Recovery','Fat Burn','Cardio','Threshold','Peak','Unknown'\n)\n\n\n", "other": null, "test_name": "accepted_values_fct_hr_zones_hr_zone__Recovery__Fat_Burn__Cardio__Threshold__Peak__Unknown", "test_params": "{\"values\": [\"Recovery\", \"Fat Burn\", \"Cardio\", \"Threshold\", \"Peak\", \"Unknown\"], \"column_name\": \"hr_zone\", \"model\": \"{{ get_where_subquery(ref('fct_hr_zones')) }}\"}", "severity": "ERROR", "status": "pass", "test_rows_sample": []}
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 24, in create_test_result_from_dict
+    return DbtTestResult(**test_result_dict)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 105, in __init__
+    self.test_display_name = self.display_name(test_name)
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 72, in display_name
+    return ' '.join([word[0].upper() + word[1:] for word in str_value.split('_')])
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 72, in <listcomp>
+    return ' '.join([word[0].upper() + word[1:] for word in str_value.split('_')])
+                     ~~~~^^^
+IndexError: string index out of range
+2026-03-23 14:35:10,591 — monitor.test_result — ERROR — Failed parsing test result - {"id": "5098e274-5a88-48c9-87db-a298664b8d98.test.analytics.dbt_utils_accepted_range_fct_hr_zones_time_in_zone__0.8aaba1c066", "model_unique_id": "model.analytics.fct_hr_zones", "test_unique_id": "test.analytics.dbt_utils_accepted_range_fct_hr_zones_time_in_zone__0.8aaba1c066", "detected_at": "2026-03-23T14:25:18", "database_name": "analytics", "schema_name": "marts", "table_name": "fct_hr_zones", "column_name": "time_in_zone", "test_type": "dbt_test", "test_sub_type": "generic", "test_results_description": null, "owners": "[]", "tags": "[]", "test_results_query": "\n\nwith meet_condition as(\n  select *\n  from \"analytics\".\"marts\".\"fct_hr_zones\"\n),\n\nvalidation_errors as (\n  select *\n  from meet_condition\n  where\n    -- never true, defaults to an empty result set. Exists to ensure any combo of the `or` clauses below succeeds\n    1 = 2\n    -- records with a value >= min_value are permitted. The `not` flips this to find records that don't meet the rule.\n    or not time_in_zone >= 0\n)\n\nselect *\nfrom validation_errors\n\n", "other": null, "test_name": "dbt_utils_accepted_range_fct_hr_zones_time_in_zone__0", "test_params": "{\"min_value\": 0, \"column_name\": \"time_in_zone\", \"model\": \"{{ get_where_subquery(ref('fct_hr_zones')) }}\"}", "severity": "ERROR", "status": "pass", "test_rows_sample": []}
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 24, in create_test_result_from_dict
+    return DbtTestResult(**test_result_dict)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 105, in __init__
+    self.test_display_name = self.display_name(test_name)
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 72, in display_name
+    return ' '.join([word[0].upper() + word[1:] for word in str_value.split('_')])
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 72, in <listcomp>
+    return ' '.join([word[0].upper() + word[1:] for word in str_value.split('_')])
+                     ~~~~^^^
+IndexError: string index out of range
+2026-03-23 14:35:10,592 — monitor.test_result — ERROR — Failed parsing test result - {"id": "5098e274-5a88-48c9-87db-a298664b8d98.test.analytics.dbt_utils_accepted_range_fct_sleep_calories_awake__0.1804d780e0", "model_unique_id": "model.analytics.fct_sleep_calories", "test_unique_id": "test.analytics.dbt_utils_accepted_range_fct_sleep_calories_awake__0.1804d780e0", "detected_at": "2026-03-23T14:25:18", "database_name": "analytics", "schema_name": "marts", "table_name": "fct_sleep_calories", "column_name": "awake", "test_type": "dbt_test", "test_sub_type": "generic", "test_results_description": null, "owners": "[]", "tags": "[]", "test_results_query": "\n\nwith meet_condition as(\n  select *\n  from \"analytics\".\"marts\".\"fct_sleep_calories\"\n),\n\nvalidation_errors as (\n  select *\n  from meet_condition\n  where\n    -- never true, defaults to an empty result set. Exists to ensure any combo of the `or` clauses below succeeds\n    1 = 2\n    -- records with a value >= min_value are permitted. The `not` flips this to find records that don't meet the rule.\n    or not awake >= 0\n)\n\nselect *\nfrom validation_errors\n\n", "other": null, "test_name": "dbt_utils_accepted_range_fct_sleep_calories_awake__0", "test_params": "{\"min_value\": 0, \"column_name\": \"awake\", \"model\": \"{{ get_where_subquery(ref('fct_sleep_calories')) }}\"}", "severity": "ERROR", "status": "pass", "test_rows_sample": []}
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 24, in create_test_result_from_dict
+    return DbtTestResult(**test_result_dict)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 105, in __init__
+    self.test_display_name = self.display_name(test_name)
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 72, in display_name
+    return ' '.join([word[0].upper() + word[1:] for word in str_value.split('_')])
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 72, in <listcomp>
+    return ' '.join([word[0].upper() + word[1:] for word in str_value.split('_')])
+                     ~~~~^^^
+IndexError: string index out of range
+2026-03-23 14:35:10,592 — monitor.test_result — ERROR — Failed parsing test result - {"id": "5098e274-5a88-48c9-87db-a298664b8d98.test.analytics.dbt_utils_accepted_range_fct_sleep_calories_calories_burned__0.7965c5f63d", "model_unique_id": "model.analytics.fct_sleep_calories", "test_unique_id": "test.analytics.dbt_utils_accepted_range_fct_sleep_calories_calories_burned__0.7965c5f63d", "detected_at": "2026-03-23T14:25:18", "database_name": "analytics", "schema_name": "marts", "table_name": "fct_sleep_calories", "column_name": "calories_burned", "test_type": "dbt_test", "test_sub_type": "generic", "test_results_description": null, "owners": "[]", "tags": "[]", "test_results_query": "\n\nwith meet_condition as(\n  select *\n  from \"analytics\".\"marts\".\"fct_sleep_calories\"\n),\n\nvalidation_errors as (\n  select *\n  from meet_condition\n  where\n    -- never true, defaults to an empty result set. Exists to ensure any combo of the `or` clauses below succeeds\n    1 = 2\n    -- records with a value >= min_value are permitted. The `not` flips this to find records that don't meet the rule.\n    or not calories_burned >= 0\n)\n\nselect *\nfrom validation_errors\n\n", "other": null, "test_name": "dbt_utils_accepted_range_fct_sleep_calories_calories_burned__0", "test_params": "{\"min_value\": 0, \"column_name\": \"calories_burned\", \"model\": \"{{ get_where_subquery(ref('fct_sleep_calories')) }}\"}", "severity": "ERROR", "status": "pass", "test_rows_sample": []}
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 24, in create_test_result_from_dict
+    return DbtTestResult(**test_result_dict)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 105, in __init__
+    self.test_display_name = self.display_name(test_name)
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 72, in display_name
+    return ' '.join([word[0].upper() + word[1:] for word in str_value.split('_')])
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 72, in <listcomp>
+    return ' '.join([word[0].upper() + word[1:] for word in str_value.split('_')])
+                     ~~~~^^^
+IndexError: string index out of range
+2026-03-23 14:35:10,592 — monitor.test_result — ERROR — Failed parsing test result - {"id": "5098e274-5a88-48c9-87db-a298664b8d98.test.analytics.dbt_utils_accepted_range_fct_sleep_calories_total_sleep__0.767c63bbc3", "model_unique_id": "model.analytics.fct_sleep_calories", "test_unique_id": "test.analytics.dbt_utils_accepted_range_fct_sleep_calories_total_sleep__0.767c63bbc3", "detected_at": "2026-03-23T14:25:18", "database_name": "analytics", "schema_name": "marts", "table_name": "fct_sleep_calories", "column_name": "total_sleep", "test_type": "dbt_test", "test_sub_type": "generic", "test_results_description": null, "owners": "[]", "tags": "[]", "test_results_query": "\n\nwith meet_condition as(\n  select *\n  from \"analytics\".\"marts\".\"fct_sleep_calories\"\n),\n\nvalidation_errors as (\n  select *\n  from meet_condition\n  where\n    -- never true, defaults to an empty result set. Exists to ensure any combo of the `or` clauses below succeeds\n    1 = 2\n    -- records with a value >= min_value are permitted. The `not` flips this to find records that don't meet the rule.\n    or not total_sleep >= 0\n)\n\nselect *\nfrom validation_errors\n\n", "other": null, "test_name": "dbt_utils_accepted_range_fct_sleep_calories_total_sleep__0", "test_params": "{\"min_value\": 0, \"column_name\": \"total_sleep\", \"model\": \"{{ get_where_subquery(ref('fct_sleep_calories')) }}\"}", "severity": "ERROR", "status": "pass", "test_rows_sample": []}
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 24, in create_test_result_from_dict
+    return DbtTestResult(**test_result_dict)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 105, in __init__
+    self.test_display_name = self.display_name(test_name)
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 72, in display_name
+    return ' '.join([word[0].upper() + word[1:] for word in str_value.split('_')])
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 72, in <listcomp>
+    return ' '.join([word[0].upper() + word[1:] for word in str_value.split('_')])
+                     ~~~~^^^
+IndexError: string index out of range
+2026-03-23 14:35:10,593 — monitor.test_result — ERROR — Failed parsing test result - {"id": "5098e274-5a88-48c9-87db-a298664b8d98.test.analytics.dbt_utils_accepted_range_fct_sleep_metrics_total_sleep__0.82e2bb83e2", "model_unique_id": "model.analytics.fct_sleep_metrics", "test_unique_id": "test.analytics.dbt_utils_accepted_range_fct_sleep_metrics_total_sleep__0.82e2bb83e2", "detected_at": "2026-03-23T14:25:18", "database_name": "analytics", "schema_name": "marts", "table_name": "fct_sleep_metrics", "column_name": "total_sleep", "test_type": "dbt_test", "test_sub_type": "generic", "test_results_description": null, "owners": "[]", "tags": "[]", "test_results_query": "\n\nwith meet_condition as(\n  select *\n  from \"analytics\".\"marts\".\"fct_sleep_metrics\"\n),\n\nvalidation_errors as (\n  select *\n  from meet_condition\n  where\n    -- never true, defaults to an empty result set. Exists to ensure any combo of the `or` clauses below succeeds\n    1 = 2\n    -- records with a value >= min_value are permitted. The `not` flips this to find records that don't meet the rule.\n    or not total_sleep >= 0\n)\n\nselect *\nfrom validation_errors\n\n", "other": null, "test_name": "dbt_utils_accepted_range_fct_sleep_metrics_total_sleep__0", "test_params": "{\"min_value\": 0, \"column_name\": \"total_sleep\", \"model\": \"{{ get_where_subquery(ref('fct_sleep_metrics')) }}\"}", "severity": "ERROR", "status": "pass", "test_rows_sample": []}
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 24, in create_test_result_from_dict
+    return DbtTestResult(**test_result_dict)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 105, in __init__
+    self.test_display_name = self.display_name(test_name)
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 72, in display_name
+    return ' '.join([word[0].upper() + word[1:] for word in str_value.split('_')])
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 72, in <listcomp>
+    return ' '.join([word[0].upper() + word[1:] for word in str_value.split('_')])
+                     ~~~~^^^
+IndexError: string index out of range
+2026-03-23 14:35:10,593 — monitor.test_result — ERROR — Failed parsing test result - {"id": "5098e274-5a88-48c9-87db-a298664b8d98.test.analytics.dbt_utils_accepted_range_fct_workout_summary_calories_per_minute__100__0.577cc9b464", "model_unique_id": "model.analytics.fct_workout_summary", "test_unique_id": "test.analytics.dbt_utils_accepted_range_fct_workout_summary_calories_per_minute__100__0.577cc9b464", "detected_at": "2026-03-23T14:25:17", "database_name": "analytics", "schema_name": "marts", "table_name": "fct_workout_summary", "column_name": "calories_per_minute", "test_type": "dbt_test", "test_sub_type": "generic", "test_results_description": null, "owners": "[]", "tags": "[]", "test_results_query": "\n\nwith meet_condition as(\n  select *\n  from \"analytics\".\"marts\".\"fct_workout_summary\"\n),\n\nvalidation_errors as (\n  select *\n  from meet_condition\n  where\n    -- never true, defaults to an empty result set. Exists to ensure any combo of the `or` clauses below succeeds\n    1 = 2\n    -- records with a value >= min_value are permitted. The `not` flips this to find records that don't meet the rule.\n    or not calories_per_minute >= 0\n    -- records with a value <= max_value are permitted. The `not` flips this to find records that don't meet the rule.\n    or not calories_per_minute <= 100\n)\n\nselect *\nfrom validation_errors\n\n", "other": null, "test_name": "dbt_utils_accepted_range_fct_workout_summary_calories_per_minute__100__0", "test_params": "{\"min_value\": 0, \"max_value\": 100, \"column_name\": \"calories_per_minute\", \"model\": \"{{ get_where_subquery(ref('fct_workout_summary')) }}\"}", "severity": "ERROR", "status": "pass", "test_rows_sample": []}
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 24, in create_test_result_from_dict
+    return DbtTestResult(**test_result_dict)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 105, in __init__
+    self.test_display_name = self.display_name(test_name)
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 72, in display_name
+    return ' '.join([word[0].upper() + word[1:] for word in str_value.split('_')])
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 72, in <listcomp>
+    return ' '.join([word[0].upper() + word[1:] for word in str_value.split('_')])
+                     ~~~~^^^
+IndexError: string index out of range
+2026-03-23 14:35:10,593 — monitor.test_result — ERROR — Failed parsing test result - {"id": "5098e274-5a88-48c9-87db-a298664b8d98.test.analytics.dbt_utils_accepted_range_fct_workout_summary_duration_mins__0.2b734fa203", "model_unique_id": "model.analytics.fct_workout_summary", "test_unique_id": "test.analytics.dbt_utils_accepted_range_fct_workout_summary_duration_mins__0.2b734fa203", "detected_at": "2026-03-23T14:25:17", "database_name": "analytics", "schema_name": "marts", "table_name": "fct_workout_summary", "column_name": "duration_mins", "test_type": "dbt_test", "test_sub_type": "generic", "test_results_description": null, "owners": "[]", "tags": "[]", "test_results_query": "\n\nwith meet_condition as(\n  select *\n  from \"analytics\".\"marts\".\"fct_workout_summary\"\n),\n\nvalidation_errors as (\n  select *\n  from meet_condition\n  where\n    -- never true, defaults to an empty result set. Exists to ensure any combo of the `or` clauses below succeeds\n    1 = 2\n    -- records with a value >= min_value are permitted. The `not` flips this to find records that don't meet the rule.\n    or not duration_mins >= 0\n)\n\nselect *\nfrom validation_errors\n\n", "other": null, "test_name": "dbt_utils_accepted_range_fct_workout_summary_duration_mins__0", "test_params": "{\"min_value\": 0, \"column_name\": \"duration_mins\", \"model\": \"{{ get_where_subquery(ref('fct_workout_summary')) }}\"}", "severity": "ERROR", "status": "pass", "test_rows_sample": []}
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 24, in create_test_result_from_dict
+    return DbtTestResult(**test_result_dict)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 105, in __init__
+    self.test_display_name = self.display_name(test_name)
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 72, in display_name
+    return ' '.join([word[0].upper() + word[1:] for word in str_value.split('_')])
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 72, in <listcomp>
+    return ' '.join([word[0].upper() + word[1:] for word in str_value.split('_')])
+                     ~~~~^^^
+IndexError: string index out of range
+2026-03-23 14:35:10,594 — monitor.test_result — ERROR — Failed parsing test result - {"id": "5098e274-5a88-48c9-87db-a298664b8d98.test.analytics.dbt_utils_accepted_range_vw_sleep_metrics_total_sleep__1440__0.739e1ad309", "model_unique_id": "model.analytics.vw_sleep_metrics", "test_unique_id": "test.analytics.dbt_utils_accepted_range_vw_sleep_metrics_total_sleep__1440__0.739e1ad309", "detected_at": "2026-03-23T14:25:18", "database_name": "analytics", "schema_name": "staging", "table_name": "vw_sleep_metrics", "column_name": "total_sleep", "test_type": "dbt_test", "test_sub_type": "generic", "test_results_description": null, "owners": "[]", "tags": "[]", "test_results_query": "\n\nwith meet_condition as(\n  select *\n  from \"analytics\".\"staging\".\"vw_sleep_metrics\"\n),\n\nvalidation_errors as (\n  select *\n  from meet_condition\n  where\n    -- never true, defaults to an empty result set. Exists to ensure any combo of the `or` clauses below succeeds\n    1 = 2\n    -- records with a value >= min_value are permitted. The `not` flips this to find records that don't meet the rule.\n    or not total_sleep >= 0\n    -- records with a value <= max_value are permitted. The `not` flips this to find records that don't meet the rule.\n    or not total_sleep <= 1440\n)\n\nselect *\nfrom validation_errors\n\n", "other": null, "test_name": "dbt_utils_accepted_range_vw_sleep_metrics_total_sleep__1440__0", "test_params": "{\"min_value\": 0, \"max_value\": 1440, \"column_name\": \"total_sleep\", \"model\": \"{{ get_where_subquery(ref('vw_sleep_metrics')) }}\"}", "severity": "ERROR", "status": "pass", "test_rows_sample": []}
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 24, in create_test_result_from_dict
+    return DbtTestResult(**test_result_dict)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 105, in __init__
+    self.test_display_name = self.display_name(test_name)
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 72, in display_name
+    return ' '.join([word[0].upper() + word[1:] for word in str_value.split('_')])
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/monitor/test_result.py", line 72, in <listcomp>
+    return ' '.join([word[0].upper() + word[1:] for word in str_value.split('_')])
+                     ~~~~^^^
+IndexError: string index out of range
+2026-03-23 14:35:10,594 — monitor.dbt_runner — INFO — Running dbt --log-format json run-operation get_models --project-dir /home/airflow/.local/lib/python3.11/site-packages/monitor/dbt_project --profiles-dir /opt/airflow/.dbt (this might take a while)
+2026-03-23 14:35:13,330 — monitor.dbt_runner — INFO — Running dbt --log-format json run-operation get_sources --project-dir /home/airflow/.local/lib/python3.11/site-packages/monitor/dbt_project --profiles-dir /opt/airflow/.dbt (this might take a while)

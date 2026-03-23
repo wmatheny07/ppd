@@ -139,6 +139,7 @@ services:
       - /opt/airflow/.dbt:/opt/airflow/.dbt:ro
       - /opt/config/runtime:/opt/config/runtime:ro
       - /opt/ppd/stacks/dbt/project:/opt/airflow/dbt/health:rw
+      - /opt/dbt-docs:/opt/dbt-docs:rw
     command: scheduler
     restart: unless-stopped
     networks:
@@ -205,6 +206,7 @@ services:
       - /opt/airflow/.dbt:/opt/airflow/.dbt:ro
       - /opt/config/runtime:/opt/config/runtime:ro
       - /opt/ppd/stacks/dbt/project:/opt/airflow/dbt/health:rw
+      - /opt/dbt-docs:/opt/dbt-docs:rw
     command: celery worker
     restart: unless-stopped
     networks:

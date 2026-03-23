@@ -18,3 +18,5 @@ models:
       +schema: marts
       # +grants:
       #   select: [ 'metabase', 'superset', 'wes' ]
+  elementary:
+    +schema: elementary

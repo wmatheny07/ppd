@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 
 from airflow import DAG
 from airflow.hooks.base import BaseHook
+from airflow.models.xcom import XCom
 from airflow.operators.bash import BashOperator
 from airflow.operators.python import PythonOperator
 from airflow.providers.http.operators.http import SimpleHttpOperator
@@ -42,11 +43,18 @@ def on_failure(context):
     )
 
 def on_success(context):
-    stats = context["ti"].xcom_pull(task_ids="trigger_airbyte_sync", key="airbyte_stats") or {}
-    rows_synced = stats.get("rowsSynced", "N/A")
+    dag_run = context["dag_run"]
+    stats = XCom.get_one(
+        run_id=dag_run.run_id,
+        task_id="trigger_airbyte_sync",
+        key="airbyte_stats",
+        dag_id="health_data_pipeline",
+        include_prior_dates=False,
+    ) or {}
+    rows_synced = stats.get("rowsSynced", stats.get("recordsSynced", "N/A"))
     bytes_synced = stats.get("bytesSynced", "N/A")
     if isinstance(bytes_synced, (int, float)):
-        bytes_synced = f"{bytes_synced / 1_048_576:.2f} MB"
+        bytes_synced = f"{bytes_synced / 1_048_576:.2f} MB" if bytes_synced > 0 else "0 MB"
 
     send_email(
         to="wmatheny07@gmail.com",
@@ -130,8 +138,7 @@ with DAG(
             time.sleep(30)
 
         # Push stats to XCom
-        stats = job_data.get("jobAggregatedStats", {})
-        context["ti"].xcom_push(key="airbyte_stats", value=stats)
+        context["ti"].xcom_push(key="airbyte_stats", value=job_data)
 
     trigger_and_wait = PythonOperator(
         task_id="trigger_airbyte_sync",
@@ -166,11 +173,40 @@ with DAG(
             --profiles-dir {DBT_PROFILES_DIR} \
             --target-path {DBT_ARTIFACTS_DIR}/target \
             --log-path {DBT_ARTIFACTS_DIR}/logs \
-            --select "staging.health marts.health" \
+            --select "staging.health marts.health elementary" \
             --exclude "mv_espn_play_stat"
         """,
         env=COMMON_ENV,
         append_env=True,
     )
 
-    trigger_and_wait >> dbt_deps >> dbt_build
+    dbt_docs = BashOperator(
+        task_id="dbt_docs_generate",
+        bash_command=f"""
+        set -euo pipefail
+        cd {DBT_PROJECT_DIR}
+        dbt docs generate \
+            --profiles-dir {DBT_PROFILES_DIR} \
+            --target-path {DBT_ARTIFACTS_DIR}/target \
+            --log-path {DBT_ARTIFACTS_DIR}/logs
+        cp {DBT_ARTIFACTS_DIR}/target/index.html /opt/dbt-docs/index.html
+        cp {DBT_ARTIFACTS_DIR}/target/catalog.json /opt/dbt-docs/catalog.json
+        cp {DBT_ARTIFACTS_DIR}/target/manifest.json /opt/dbt-docs/manifest.json
+        """,
+        env=COMMON_ENV,
+        append_env=True,
+    )
+
+    edr_report = BashOperator(
+        task_id="edr_report",
+        bash_command=f"""
+        set -euo pipefail
+        edr monitor report \
+            --profiles-dir {DBT_PROFILES_DIR}
+        cp {DBT_PROJECT_DIR}/elementary.html /opt/dbt-docs/elementary_report.html
+        """,
+        env=COMMON_ENV,
+        append_env=True,
+    )
+
+    trigger_and_wait >> dbt_deps >> dbt_build >> dbt_docs >> edr_report

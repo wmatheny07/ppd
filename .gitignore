@@ -10,14 +10,21 @@
 # python
 **/__pycache__/
 **/*.pyc
+**/*.pyo
 **/.pytest_cache/
 **/.mypy_cache/
 **/.ruff_cache/
+**/.venv/
+**/venv/
+
+# jupyter
+**/.ipynb_checkpoints/
 
 # airflow runtime
 stacks/airflow/airflow/logs/
 stacks/airflow/airflow/postgres-data/
 stacks/airflow/airflow/*.pid
+stacks/airflow/airflow/dbt_artifacts/
 
 # dbt
 **/target/
@@ -25,16 +32,18 @@ stacks/airflow/airflow/*.pid
 **/dbt_packages/
 **/dbt-adapters/
 **/dbt_internal_packages/
+**/package-lock.yml
 
 # misc
 .DS_Store
 .vscode/
 .idea/
 
-# data
-*.csv
-*.txt
-*.json
+# data files (scoped — avoid catching config/requirements files globally)
+data/
+**/*.csv
+# *.txt intentionally omitted — would catch requirements-*.txt
+# *.json intentionally omitted — would catch packages.json, dbt configs, etc.
 
 # Superset
 **/site-packages/
@@ -42,4 +51,5 @@ stacks/airflow/airflow/*.pid
 **/superset.db-journal
 **/superset_home/*.log
 **/superset_home/.cache/
+**/superset_home/.local/
 **/.cache/
