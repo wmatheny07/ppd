@@ -48,3 +48,33 @@ models:
     tests:
     - dbt_utils.accepted_range:
         min_value: 0
+
+- name: fct_sleep_metrics
+  columns:
+  - name: record_date
+    tests: [ not_null ]
+  - name: person
+    tests: [ not_null ]
+  - name: total_sleep
+    tests:
+    - dbt_utils.accepted_range:
+        min_value: 0
+
+- name: fct_sleep_calories
+  columns:
+  - name: record_date
+    tests: [ not_null ]
+  - name: person
+    tests: [ not_null ]
+  - name: total_sleep
+    tests:
+    - dbt_utils.accepted_range:
+        min_value: 0
+  - name: awake
+    tests:
+    - dbt_utils.accepted_range:
+        min_value: 0
+  - name: calories_burned
+    tests:
+    - dbt_utils.accepted_range:
+        min_value: 0

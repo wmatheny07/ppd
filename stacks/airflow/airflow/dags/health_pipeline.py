@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import time
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from airflow import DAG
 from airflow.hooks.base import BaseHook
@@ -22,6 +23,11 @@ DEFAULT_ARGS = {
     "retry_delay": timedelta(minutes=5),
 }
 
+ET = ZoneInfo("America/New_York")
+
+def _fmt(dt):
+    return dt.astimezone(ET).strftime("%Y-%m-%d %I:%M %p ET")
+
 def on_failure(context):
     send_email(
         to="wmatheny07@gmail.com",
@@ -29,17 +35,32 @@ def on_failure(context):
         html_content=f"""
         <b>DAG:</b> health_data_pipeline<br>
         <b>Task:</b> {context['task_instance'].task_id}<br>
-        <b>Execution Date:</b> {context['execution_date']}<br>
+        <b>Execution Date:</b> {_fmt(context['execution_date'])}<br>
         <b>Log URL:</b> <a href="{context['task_instance'].log_url}">View Logs</a><br>
         <b>Exception:</b> {context.get('exception', 'N/A')}
         """,
     )
 
 def on_success(context):
+    stats = context["ti"].xcom_pull(task_ids="trigger_airbyte_sync", key="airbyte_stats") or {}
+    rows_synced = stats.get("rowsSynced", "N/A")
+    bytes_synced = stats.get("bytesSynced", "N/A")
+    if isinstance(bytes_synced, (int, float)):
+        bytes_synced = f"{bytes_synced / 1_048_576:.2f} MB"
+
     send_email(
         to="wmatheny07@gmail.com",
         subject="✅ health_data_pipeline succeeded",
-        html_content=f"DAG <b>health_data_pipeline</b> completed successfully at {context['execution_date']}.",
+        html_content=f"""
+        <b>DAG:</b> health_data_pipeline<br>
+        <b>Completed:</b> {_fmt(context['execution_date'])}<br>
+        <br>
+        <b>Airbyte Sync Results:</b><br>
+        <ul>
+            <li>Rows synced: {rows_synced}</li>
+            <li>Bytes synced: {bytes_synced}</li>
+        </ul>
+        """,
     )
 
 with DAG(
@@ -91,6 +112,7 @@ with DAG(
         print(f"Airbyte job triggered: {job_id}")
 
         # Poll until complete
+        job_data = {}
         while True:
             status_resp = requests.get(
                 f"{base_url}/api/public/v1/jobs/{job_id}",
@@ -98,13 +120,18 @@ with DAG(
                 timeout=30,
             )
             status_resp.raise_for_status()
-            status = status_resp.json()["status"]
+            job_data = status_resp.json()
+            status = job_data["status"]
             print(f"Airbyte job {job_id} status: {status}")
             if status == "succeeded":
                 break
             if status in ("failed", "cancelled"):
                 raise RuntimeError(f"Airbyte sync {job_id} did not succeed: status={status}")
             time.sleep(30)
+
+        # Push stats to XCom
+        stats = job_data.get("jobAggregatedStats", {})
+        context["ti"].xcom_push(key="airbyte_stats", value=stats)
 
     trigger_and_wait = PythonOperator(
         task_id="trigger_airbyte_sync",

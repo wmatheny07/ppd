@@ -11,6 +11,10 @@ models:
     staging:
       +materialized: view
       +schema: staging
+      # +grants:
+      #   select: [ 'metabase', 'superset', 'wes' ]
     marts:
       +materialized: table
       +schema: marts
+      # +grants:
+      #   select: [ 'metabase', 'superset', 'wes' ]
