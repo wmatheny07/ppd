@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import time
 from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
+import pytz
 
 from airflow import DAG
 from airflow.hooks.base import BaseHook
@@ -24,7 +24,7 @@ DEFAULT_ARGS = {
     "retry_delay": timedelta(minutes=5),
 }
 
-ET = ZoneInfo("America/New_York")
+ET = pytz.timezone("America/New_York")
 
 def _fmt(dt):
     return dt.astimezone(ET).strftime("%Y-%m-%d %I:%M %p ET")
@@ -209,4 +209,4 @@ with DAG(
         append_env=True,
     )
 
-    trigger_and_wait >> dbt_deps >> dbt_build >> dbt_docs >> edr_report
+    trigger_and_wait >> dbt_deps >> dbt_build >> [dbt_docs, edr_report]

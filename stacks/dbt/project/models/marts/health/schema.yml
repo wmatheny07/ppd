@@ -25,13 +25,15 @@ models:
     description: "Total workout duration in minutes. Uses adjusted duration when fct_workout_time_adj has a correction."
     tests:
     - dbt_utils.accepted_range:
-        min_value: 0
+        arguments:
+          min_value: 0
   - name: calories_per_minute
     description: "Caloric burn rate calculated as total_calories / duration_mins."
     tests:
     - dbt_utils.accepted_range:
-        min_value: 0
-        max_value: 100
+        arguments:
+          min_value: 0
+          max_value: 100
   - name: intensity
     description: "Workout intensity value as reported by Apple Health."
 
@@ -51,12 +53,14 @@ models:
     tests:
     - not_null
     - accepted_values:
-        values: [ 'Recovery', 'Fat Burn', 'Cardio', 'Threshold', 'Peak', 'Unknown' ]
+        arguments:
+          values: [ 'Recovery', 'Fat Burn', 'Cardio', 'Threshold', 'Peak', 'Unknown' ]
   - name: time_in_zone
     description: "Total time spent in this HR zone during the workout in minutes."
     tests:
     - dbt_utils.accepted_range:
-        min_value: 0
+        arguments:
+          min_value: 0
 
 - name: fct_dim_sleep
   description: "Incremental mart breaking nightly sleep into dimensional rows by sleep type (REM, core, deep, awake) per person and date."
@@ -72,12 +76,14 @@ models:
     tests:
     - not_null
     - accepted_values:
-        values: [ 'rem', 'core', 'deep', 'awake' ]
+        arguments:
+          values: [ 'rem', 'core', 'deep', 'awake' ]
   - name: sleep_duration
     description: "Duration of this sleep stage in minutes."
     tests:
     - dbt_utils.accepted_range:
-        min_value: 0
+        arguments:
+          min_value: 0
   - name: total_sleep
     description: "Total sleep duration for the night in minutes (all stages combined)."
 
@@ -110,7 +116,8 @@ models:
     description: "Total sleep duration in minutes (rem + core + deep + awake)."
     tests:
     - dbt_utils.accepted_range:
-        min_value: 0
+        arguments:
+          min_value: 0
 
 - name: fct_sleep_calories
   description: "Incremental mart joining nightly sleep metrics with same-day calorie burn totals, enabling analysis of the relationship between sleep quality and energy expenditure."
@@ -125,17 +132,20 @@ models:
     description: "Total sleep duration in minutes for the night."
     tests:
     - dbt_utils.accepted_range:
-        min_value: 0
+        arguments:
+          min_value: 0
   - name: awake
     description: "Duration of time awake during the sleep window in minutes."
     tests:
     - dbt_utils.accepted_range:
-        min_value: 0
+        arguments:
+          min_value: 0
   - name: calories_burned
     description: "Total active kilocalories burned across all workouts on the same date."
     tests:
     - dbt_utils.accepted_range:
-        min_value: 0
+        arguments:
+          min_value: 0
 
 - name: fct_active_energy_summary
   description: "Incremental mart aggregating active calorie burn per workout session per person, with start/end timestamps and total calories by data source."

@@ -51,21 +51,18 @@ FROM
     FROM
       (
         SELECT
-          JSONB_ARRAY_ELEMENTS(data -> 'workouts') ->> 'id' AS id,
-          split_part(_ab_source_file_url, '/', 3) person,
-          JSONB_ARRAY_ELEMENTS(
-            JSONB_ARRAY_ELEMENTS(data -> 'workouts') -> 'activeEnergy'
-          ) ->> 'qty' AS qty,
-          JSONB_ARRAY_ELEMENTS(
-            JSONB_ARRAY_ELEMENTS(data -> 'workouts') -> 'activeEnergy'
-          ) ->> 'date' AS date,
-          JSONB_ARRAY_ELEMENTS(
-            JSONB_ARRAY_ELEMENTS(data -> 'workouts') -> 'activeEnergy'
-          ) ->> 'units' AS units,
-          JSONB_ARRAY_ELEMENTS(
-            JSONB_ARRAY_ELEMENTS(data -> 'workouts') -> 'activeEnergy'
-          ) ->> 'source' AS data_source
+          workout ->> 'id' AS id,
+          split_part(w._ab_source_file_url, '/', 3) AS person,
+          {{ convert_energy(
+            "energy_entry ->> 'qty'",
+            "energy_entry ->> 'units'"
+          ) }} AS qty,
+          energy_entry ->> 'date' AS date,
+          energy_entry ->> 'units' AS units,
+          energy_entry ->> 'source' AS data_source
         FROM
-          {{ source('health', 'Workouts') }} w
+          {{ source('health', 'Workouts') }} w,
+          LATERAL JSONB_ARRAY_ELEMENTS(w.data -> 'workouts') AS workout,
+          LATERAL JSONB_ARRAY_ELEMENTS(workout -> 'activeEnergy') AS energy_entry
       ) data
   ) data_mv

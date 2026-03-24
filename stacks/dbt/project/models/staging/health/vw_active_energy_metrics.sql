@@ -1,7 +1,7 @@
 SELECT
   "date"::timestamp AS record_date,
   person,
-  qty::float AS calories,
+  {{ convert_energy("qty", "units") }}::float AS calories,
   data_source,
   metric_name
 FROM
@@ -10,6 +10,7 @@ FROM
       JSONB_ARRAY_ELEMENTS(JSONB_ARRAY_ELEMENTS(data -> 'metrics') -> 'data') ->> 'date' "date",
       split_part(_ab_source_file_url, '/', 3) person,
       JSONB_ARRAY_ELEMENTS(JSONB_ARRAY_ELEMENTS(data -> 'metrics') -> 'data') ->> 'qty' qty,
+      JSONB_ARRAY_ELEMENTS(JSONB_ARRAY_ELEMENTS(data -> 'metrics') -> 'data') ->> 'units' units,
       JSONB_ARRAY_ELEMENTS(JSONB_ARRAY_ELEMENTS(data -> 'metrics') -> 'data') ->> 'source' data_source,
       JSONB_ARRAY_ELEMENTS(data -> 'metrics') ->> 'name' metric_name
     FROM

@@ -134,8 +134,9 @@ models:
     description: "Total sleep duration in minutes (rem + core + deep + awake)."
     tests:
     - dbt_utils.accepted_range:
-        min_value: 0
-        max_value: 1440 # 24hrs in minutes
+        arguments:
+          min_value: 0
+          max_value: 1440 # 24hrs in minutes
 
 - name: vw_active_energy
   description: "Staging view of active energy burn records at the interval level, used for aggregation into energy summary marts."

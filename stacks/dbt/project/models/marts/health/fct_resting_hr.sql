@@ -1,0 +1,13 @@
+{{ config(materialized='incremental', unique_key=['id', 'person']) }}
+
+select
+    md5(concat(record_date, person, resting_heart_rate)) as id,
+        record_date,
+        person,
+        resting_heart_rate
+        from
+            {{ ref('vw_resting_hr_metrics') }}
+        {% if is_incremental() %}
+        where
+            record_date >= current_date - interval '2 years'
+            {% endif %}

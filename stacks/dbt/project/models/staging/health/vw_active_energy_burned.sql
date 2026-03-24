@@ -1,7 +1,11 @@
 SELECT
-  JSONB_ARRAY_ELEMENTS(data -> 'workouts') ->> 'id' AS id,
-  split_part(_ab_source_file_url, '/', 3) person,
-  JSONB_ARRAY_ELEMENTS(data -> 'workouts') -> 'activeEnergyBurned' ->> 'qty' AS qty,
-  JSONB_ARRAY_ELEMENTS(data -> 'workouts') -> 'activeEnergyBurned' ->> 'units' AS units
+  workout ->> 'id' AS id,
+  split_part(w._ab_source_file_url, '/', 3) AS person,
+  {{ convert_energy(
+    "workout -> 'activeEnergyBurned' ->> 'qty'",
+    "workout -> 'activeEnergyBurned' ->> 'units'"
+  ) }} AS qty,
+  workout -> 'activeEnergyBurned' ->> 'units' AS units
 FROM
-  {{ source('health', 'Workouts') }} w
+  {{ source('health', 'Workouts') }} w,
+  LATERAL JSONB_ARRAY_ELEMENTS(w.data -> 'workouts') AS workout
