@@ -13,23 +13,25 @@ models:
       description: "Analytics models for health data"
       release: "1.0.0"
     staging:
+      +materialized: view
+      +schema: staging
       +tags: [ "staging" ]
+      # +grants:
+      #   select: [ 'metabase', 'superset', 'wes' ]
       health:
         +tags: [ "staging", "health" ]
       espn:
         +enabled: false
-      +materialized: view
-      +schema: staging
+    marts:
+      +materialized: table
+      +schema: marts
+      +tags: [ "marts" ]
       # +grants:
       #   select: [ 'metabase', 'superset', 'wes' ]
-    marts:
-      +tags: [ "marts" ]
       health:
         +tags: [ "marts", "health" ]
       espn:
         +enabled: false
-      +materialized: table
-      +schema: marts
       # +grants:
       #   select: [ 'metabase', 'superset', 'wes' ]
   elementary:

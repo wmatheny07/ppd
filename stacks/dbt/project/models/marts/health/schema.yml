@@ -2,35 +2,58 @@ models:
 - name: fct_workout_summary
   description: "Mart table summarizing completed workout sessions per person, including duration, distance, and calories burned per minute."
   columns:
+  - name: id
+    description: "Unique workout session identifier from Apple Health."
   - name: person
-    tests: [ not_null ]
-  - name: workout_start
+    description: "Person identifier (e.g. wes, ashley)."
     tests: [ not_null ]
   - name: workout_type
+    description: "Type of workout activity. Run sessions with < 13 cal/min are reclassified as Hiking."
     tests: [ not_null ]
+  - name: data_source
+    description: "Device or app that recorded the workout (e.g. Apple Watch, iFIT)."
+  - name: workout_start
+    description: "Timestamp when the workout session started."
+    tests: [ not_null ]
+  - name: start_nearest_30min
+    description: "Workout start time rounded to the nearest 30-minute mark, used for joining with other time-series data."
+  - name: workout_end
+    description: "Timestamp when the workout session ended. Uses adjusted end time from fct_workout_time_adj if available."
+  - name: total_calories
+    description: "Total kilocalories burned during the workout. Uses iFIT calories when data source is iFIT."
   - name: duration_mins
+    description: "Total workout duration in minutes. Uses adjusted duration when fct_workout_time_adj has a correction."
     tests:
     - dbt_utils.accepted_range:
         min_value: 0
   - name: calories_per_minute
+    description: "Caloric burn rate calculated as total_calories / duration_mins."
     tests:
     - dbt_utils.accepted_range:
         min_value: 0
         max_value: 100
+  - name: intensity
+    description: "Workout intensity value as reported by Apple Health."
 
 - name: fct_hr_zones
   description: "Incremental mart classifying workout heart rate data into training zones (Recovery, Fat Burn, Cardio, Threshold, Peak) based on age-adjusted max HR."
   columns:
   - name: record_date
+    description: "Date of the heart rate zone record."
     tests: [ not_null ]
   - name: person
+    description: "Person identifier."
     tests: [ not_null ]
+  - name: workout_type
+    description: "Type of workout activity this zone reading is associated with."
   - name: hr_zone
+    description: "Training zone classification based on percentage of age-adjusted max HR (220 - age)."
     tests:
     - not_null
     - accepted_values:
         values: [ 'Recovery', 'Fat Burn', 'Cardio', 'Threshold', 'Peak', 'Unknown' ]
   - name: time_in_zone
+    description: "Total time spent in this HR zone during the workout in minutes."
     tests:
     - dbt_utils.accepted_range:
         min_value: 0
@@ -39,27 +62,52 @@ models:
   description: "Incremental mart breaking nightly sleep into dimensional rows by sleep type (REM, core, deep, awake) per person and date."
   columns:
   - name: record_date
+    description: "Date of the sleep record."
     tests: [ not_null ]
   - name: person
+    description: "Person identifier."
     tests: [ not_null ]
   - name: sleep_type
+    description: "Category of sleep stage for this row."
     tests:
     - not_null
     - accepted_values:
         values: [ 'rem', 'core', 'deep', 'awake' ]
   - name: sleep_duration
+    description: "Duration of this sleep stage in minutes."
     tests:
     - dbt_utils.accepted_range:
         min_value: 0
+  - name: total_sleep
+    description: "Total sleep duration for the night in minutes (all stages combined)."
 
 - name: fct_sleep_metrics
   description: "Incremental mart of nightly sleep metrics per person, including total sleep duration and breakdown by REM, core, deep, and awake stages."
   columns:
   - name: record_date
+    description: "Date of the sleep record."
     tests: [ not_null ]
   - name: person
+    description: "Person identifier."
     tests: [ not_null ]
+  - name: rem
+    description: "Duration of REM sleep in minutes."
+  - name: core
+    description: "Duration of core (light) sleep in minutes."
+  - name: deep
+    description: "Duration of deep sleep in minutes."
+  - name: awake
+    description: "Duration of time awake during the sleep window in minutes."
+  - name: in_bed_start
+    description: "Timestamp when the person got into bed."
+  - name: sleep_start
+    description: "Timestamp when sleep was detected as starting."
+  - name: in_bed_end
+    description: "Timestamp when the person got out of bed."
+  - name: sleep_end
+    description: "Timestamp when sleep was detected as ending."
   - name: total_sleep
+    description: "Total sleep duration in minutes (rem + core + deep + awake)."
     tests:
     - dbt_utils.accepted_range:
         min_value: 0
@@ -68,24 +116,53 @@ models:
   description: "Incremental mart joining nightly sleep metrics with same-day calorie burn totals, enabling analysis of the relationship between sleep quality and energy expenditure."
   columns:
   - name: record_date
+    description: "Date of the sleep and calorie record."
     tests: [ not_null ]
   - name: person
+    description: "Person identifier."
     tests: [ not_null ]
   - name: total_sleep
+    description: "Total sleep duration in minutes for the night."
     tests:
     - dbt_utils.accepted_range:
         min_value: 0
   - name: awake
+    description: "Duration of time awake during the sleep window in minutes."
     tests:
     - dbt_utils.accepted_range:
         min_value: 0
   - name: calories_burned
+    description: "Total active kilocalories burned across all workouts on the same date."
     tests:
     - dbt_utils.accepted_range:
         min_value: 0
 
 - name: fct_active_energy_summary
   description: "Incremental mart aggregating active calorie burn per workout session per person, with start/end timestamps and total calories by data source."
+  columns:
+  - name: id
+    description: "Workout session identifier."
+  - name: person
+    description: "Person identifier."
+  - name: start_time
+    description: "Earliest active energy interval timestamp for this workout session."
+  - name: end_time
+    description: "Latest active energy interval timestamp for this workout session."
+  - name: data_source
+    description: "Device or app that recorded the active energy data."
+  - name: total_calories
+    description: "Sum of all active energy intervals for this workout session in kilocalories."
 
 - name: fct_workout_time_adj
   description: "Incremental mart of time-adjusted workout records, filtering outlier sessions based on heart rate percent difference from prior sessions."
+  columns:
+  - name: id
+    description: "Workout session identifier."
+  - name: person
+    description: "Person identifier."
+  - name: start_date
+    description: "Earliest active energy interval date for this workout session."
+  - name: end_date
+    description: "Latest active energy interval date for this workout session."
+  - name: updated_end_date
+    description: "Corrected end date derived from the interval where the moving average percent difference exceeds 15%, indicating the true workout end."

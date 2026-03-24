@@ -3,42 +3,135 @@ models:
   description: "Staging view of workout sessions extracted from Apple Health JSON, including workout type, duration, and per-person attribution."
   columns:
   - name: id
-    tests: [ not_null]
+    description: "Unique identifier for the workout session from Apple Health."
+    tests: [ not_null ]
   - name: person
+    description: "Person identifier derived from the source file path (e.g. wes, ashley)."
     tests: [ not_null ]
   - name: start
+    description: "Timestamp when the workout session started."
     tests: [ not_null ]
+  - name: end
+    description: "Timestamp when the workout session ended."
+  - name: duration_mins
+    description: "Total duration of the workout in minutes, rounded to 2 decimal places."
+  - name: total_calories
+    description: "Total active energy burned during the workout in kilocalories."
   - name: workout_type
+    description: "Type of workout activity (e.g. Run, Cycling, Strength Training)."
     tests: [ not_null ]
+  - name: intensity
+    description: "Workout intensity value as reported by Apple Health."
+  - name: intensity_units
+    description: "Units for the intensity measurement."
 
 - name: vw_heart_rate_data
   description: "Staging view of heart rate samples by date and person, sourced from Apple Health metrics data."
   columns:
   - name: date
+    description: "Timestamp of the heart rate reading."
     tests: [ not_null ]
   - name: person
+    description: "Person identifier derived from the source file path."
     tests: [ not_null ]
+  - name: min
+    description: "Minimum heart rate recorded during the interval (BPM)."
+  - name: max
+    description: "Maximum heart rate recorded during the interval (BPM)."
+  - name: avg
+    description: "Average heart rate recorded during the interval (BPM)."
+  - name: data_source
+    description: "Device or app that recorded the heart rate reading."
+  - name: metric_name
+    description: "Source metric name from Apple Health (always heart_rate for this view)."
 
 - name: vw_heart_rate_recovery
   description: "Staging view of post-workout heart rate recovery data, including average and max recovery values per workout session."
+  columns:
+  - name: id
+    description: "Workout session identifier this recovery reading belongs to."
+  - name: person
+    description: "Person identifier derived from the source file path."
+  - name: avg
+    description: "Average heart rate during the recovery period (BPM)."
+  - name: max
+    description: "Maximum heart rate during the recovery period (BPM)."
+  - name: min
+    description: "Minimum heart rate during the recovery period (BPM)."
+  - name: date
+    description: "Timestamp of the heart rate recovery reading."
+  - name: units
+    description: "Units for the heart rate values (typically count/min)."
 
 - name: vw_hr_metrics
   description: "Staging view of daily heart rate metrics (min, max, avg) per person and data source from Apple Health."
+  columns:
+  - name: record_date
+    description: "Timestamp of the heart rate metric record."
+  - name: person
+    description: "Person identifier derived from the source file path."
+  - name: min
+    description: "Minimum heart rate for the period (BPM)."
+  - name: max
+    description: "Maximum heart rate for the period (BPM)."
+  - name: avg
+    description: "Average heart rate for the period (BPM)."
+  - name: data_source
+    description: "Device or app that recorded the heart rate data."
+  - name: metric_name
+    description: "Source metric name from Apple Health."
 
 - name: vw_hr_variability_metrics
   description: "Staging view of daily heart rate variability (HRV) measurements per person from Apple Health."
+  columns:
+  - name: record_date
+    description: "Timestamp of the HRV measurement."
+  - name: person
+    description: "Person identifier derived from the source file path."
+  - name: heart_rate_variability
+    description: "Heart rate variability value in milliseconds (SDNN)."
+  - name: metric_name
+    description: "Source metric name from Apple Health (always heart_rate_variability)."
 
 - name: vw_resting_hr_metrics
   description: "Staging view of daily resting heart rate readings per person from Apple Health."
+  columns:
+  - name: record_date
+    description: "Timestamp of the resting heart rate reading."
+  - name: person
+    description: "Person identifier derived from the source file path."
+  - name: resting_heart_rate
+    description: "Resting heart rate value in beats per minute."
+  - name: metric_name
+    description: "Source metric name from Apple Health (always resting_heart_rate)."
 
 - name: vw_sleep_metrics
   description: "Staging view of nightly sleep metrics including REM, core, deep, and awake durations per person from Apple Health."
   columns:
   - name: record_date
+    description: "Date of the sleep record."
     tests: [ not_null ]
   - name: person
+    description: "Person identifier derived from the source file path."
     tests: [ not_null ]
+  - name: rem
+    description: "Duration of REM sleep in minutes."
+  - name: core
+    description: "Duration of core (light) sleep in minutes."
+  - name: deep
+    description: "Duration of deep sleep in minutes."
+  - name: awake
+    description: "Duration of time awake during the sleep session in minutes."
+  - name: in_bed_start
+    description: "Timestamp when the person got into bed."
+  - name: sleep_start
+    description: "Timestamp when sleep was detected as starting."
+  - name: in_bed_end
+    description: "Timestamp when the person got out of bed."
+  - name: sleep_end
+    description: "Timestamp when sleep was detected as ending."
   - name: total_sleep
+    description: "Total sleep duration in minutes (rem + core + deep + awake)."
     tests:
     - dbt_utils.accepted_range:
         min_value: 0
@@ -46,33 +139,150 @@ models:
 
 - name: vw_active_energy
   description: "Staging view of active energy burn records at the interval level, used for aggregation into energy summary marts."
+  columns:
+  - name: id
+    description: "Workout session identifier this energy interval belongs to."
+  - name: person
+    description: "Person identifier derived from the source file path."
+  - name: data_source
+    description: "Device or app that recorded the active energy data."
+  - name: qty
+    description: "Kilocalories burned during this interval."
+  - name: date
+    description: "Timestamp of this active energy interval."
+  - name: perc_diff_prev
+    description: "Percentage difference in 4-reading moving average from the prior interval, used for outlier detection in fct_workout_time_adj."
 
 - name: vw_active_energy_burned
   description: "Staging view of active energy burned per workout session extracted from Apple Health workout JSON."
+  columns:
+  - name: id
+    description: "Workout session identifier."
+  - name: person
+    description: "Person identifier derived from the source file path."
+  - name: qty
+    description: "Total active energy burned for the workout session in kilocalories."
+  - name: units
+    description: "Units for the energy value (typically Cal)."
 
 - name: vw_active_energy_metrics
   description: "Staging view of daily active energy metrics (calories) per person and data source from Apple Health."
+  columns:
+  - name: record_date
+    description: "Timestamp of the active energy record."
+  - name: person
+    description: "Person identifier derived from the source file path."
+  - name: calories
+    description: "Active energy burned in kilocalories."
+  - name: data_source
+    description: "Device or app that recorded the energy data."
+  - name: metric_name
+    description: "Source metric name from Apple Health (always active_energy)."
 
 - name: vw_basal_energy_metrics
   description: "Staging view of daily basal metabolic energy expenditure per person from Apple Health."
+  columns:
+  - name: record_date
+    description: "Timestamp of the basal energy record."
+  - name: person
+    description: "Person identifier derived from the source file path."
+  - name: basal_energy_burned
+    description: "Basal metabolic energy burned in kilocalories."
+  - name: data_source
+    description: "Device or app that recorded the basal energy data."
+  - name: metric_name
+    description: "Source metric name from Apple Health (always basal_energy_burned)."
 
 - name: vw_distance_metrics
   description: "Staging view of daily distance traveled (walking/running) per person and data source from Apple Health."
+  columns:
+  - name: record_date
+    description: "Timestamp of the distance record."
+  - name: person
+    description: "Person identifier derived from the source file path."
+  - name: distance
+    description: "Distance traveled in kilometers."
+  - name: data_source
+    description: "Device or app that recorded the distance data."
+  - name: metric_name
+    description: "Source metric name from Apple Health (always walking_running_distance)."
 
 - name: vw_physical_effort_metrics
   description: "Staging view of daily physical effort scores per person from Apple Health."
+  columns:
+  - name: record_date
+    description: "Timestamp of the physical effort record."
+  - name: person
+    description: "Person identifier derived from the source file path."
+  - name: physical_effort
+    description: "Physical effort score as reported by Apple Health."
+  - name: metric_name
+    description: "Source metric name from Apple Health (always physical_effort)."
 
 - name: vw_routes
   description: "Staging view of GPS route data per workout, including speed, altitude, and coordinates from Apple Health."
+  columns:
+  - name: rt_id
+    description: "Workout session identifier this route point belongs to."
+  - name: person
+    description: "Person identifier derived from the source file path."
+  - name: rt_speed
+    description: "Speed at this GPS route point in meters per second."
+  - name: rt_altitude
+    description: "Altitude at this GPS route point in meters."
+  - name: rt_latitude
+    description: "Latitude coordinate of this GPS route point."
+  - name: rt_longitude
+    description: "Longitude coordinate of this GPS route point."
 
 - name: vw_step_count_metrics
   description: "Staging view of daily step count totals per person and data source from Apple Health."
+  columns:
+  - name: record_date
+    description: "Timestamp of the step count record."
+  - name: person
+    description: "Person identifier derived from the source file path."
+  - name: step_count
+    description: "Total number of steps recorded during the interval."
+  - name: data_source
+    description: "Device or app that recorded the step count."
+  - name: metric_name
+    description: "Source metric name from Apple Health (always step_count)."
 
 - name: vw_walking_and_running_distance
   description: "Staging view of walking and running distance per workout interval extracted from Apple Health workout JSON."
+  columns:
+  - name: id
+    description: "Workout session identifier this distance interval belongs to."
+  - name: person
+    description: "Person identifier derived from the source file path."
+  - name: qty
+    description: "Distance covered during this interval."
+  - name: date
+    description: "Timestamp of this distance interval."
+  - name: units
+    description: "Units for the distance value (typically km)."
 
 - name: vw_walking_speed_metrics
   description: "Staging view of daily average walking speed per person from Apple Health."
+  columns:
+  - name: record_date
+    description: "Timestamp of the walking speed record."
+  - name: person
+    description: "Person identifier derived from the source file path."
+  - name: walking_speed
+    description: "Average walking speed in km/h."
+  - name: metric_name
+    description: "Source metric name from Apple Health (always walking_speed)."
 
 - name: vw_walking_step_metrics
   description: "Staging view of daily walking step length metrics per person from Apple Health."
+  columns:
+  - name: record_date
+    description: "Timestamp of the step length record."
+  - name: person
+    description: "Person identifier derived from the source file path."
+  - name: step_length
+    description: "Average walking step length in meters."
+  - name: metric_name
+    description: "Source metric name from Apple Health (always walking_step_length)."
