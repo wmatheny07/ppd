@@ -1,0 +1,22 @@
+storage:
+  postgres:
+    postgres_db:
+      username:
+        env: ANALYTICS_DB_USER
+      password:
+        env: ANALYTICS_DB_PASSWORD
+      hostname: postgres
+      db_name:
+        env: DAGSTER_DB_NAME
+      port: 5432
+
+run_coordinator:
+  module: dagster.core.run_coordinator
+  class: DefaultRunCoordinator
+
+run_launcher:
+  module: dagster.core.launcher
+  class: DefaultRunLauncher
+
+telemetry:
+  enabled: false

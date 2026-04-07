@@ -9,5 +9,5 @@ select
             {{ ref('vw_resting_hr_metrics') }}
         {% if is_incremental() %}
         where
-            record_date >= current_date - interval '2 years'
-            {% endif %}
+        record_date > (SELECT MAX(record_date) FROM {{ this }})
+        {% endif %}

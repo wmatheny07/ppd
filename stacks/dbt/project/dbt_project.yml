@@ -20,8 +20,16 @@ models:
       #   select: [ 'metabase', 'superset', 'wes' ]
       health:
         +tags: [ "staging", "health" ]
+      weather:
+        +tags: [ "staging", "weather" ]
       espn:
         +enabled: false
+    intermediate:
+      +materialized: view
+      +schema: intermediate
+      +tags: [ "intermediate" ]
+      weather:
+        +tags: [ "intermediate", "weather" ]
     marts:
       +materialized: table
       +schema: marts
@@ -30,6 +38,8 @@ models:
       #   select: [ 'metabase', 'superset', 'wes' ]
       health:
         +tags: [ "marts", "health" ]
+      weather:
+        +tags: [ "marts", "weather" ]
       espn:
         +enabled: false
       # +grants:

@@ -1,0 +1,48 @@
+version: 2
+
+models:
+  - name: stg_weather_observations
+    description: >
+      Cleaned and deduplicated weather observations with consistent
+      naming conventions and unit annotations. Primary feed for
+      health-weather correlation analysis.
+    columns:
+      - name: observation_key
+        description: Surrogate key from location_id + observation_time + resolution
+        tests:
+          - unique
+          - not_null
+      - name: location_id
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['summerville_sc', 'la_plata_md', 'ooltewah_tn', 'fairfax_va', 'clifton_forge_va']
+      - name: observation_time
+        tests:
+          - not_null
+      - name: temperature_f
+        description: Air temperature at 2m height in Fahrenheit
+      - name: feels_like_f
+        description: Apparent temperature accounting for wind chill / heat index
+      - name: relative_humidity_pct
+        description: Relative humidity percentage (0-100)
+      - name: us_aqi_composite
+        description: US Air Quality Index (0-500)
+
+  - name: stg_air_quality_observations
+    description: >
+      Cleaned air quality observations with US AQI, EU AQI,
+      particulate matter, gas concentrations, and pollen counts.
+    columns:
+      - name: observation_key
+        description: Surrogate key
+        tests:
+          - unique
+          - not_null
+      - name: location_id
+        tests:
+          - not_null
+      - name: observation_time
+        tests:
+          - not_null

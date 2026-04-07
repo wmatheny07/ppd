@@ -15,3 +15,61 @@ sources:
   tables:
   - name: Workouts
   - name: metrics
+- name: raw_weather
+  schema: raw_weather
+  description: >
+    Raw weather and air quality data ingested from Open-Meteo via Kafka.
+    Updated every 15 minutes for weather observations, hourly for air quality.
+  config:
+    freshness:
+      warn_after:
+        count: 30
+        period: minute
+      error_after:
+        count: 2
+        period: hour
+    loaded_at_field: loaded_at
+  tables:
+    - name: weather_observations
+      description: >
+        Raw weather observations from Open-Meteo Forecast API.
+        Contains both 15-minute (HRRR) and hourly resolution data
+        for 5 monitored locations with health-relevant variables.
+      columns:
+        - name: id
+          description: Auto-incrementing surrogate key
+          tests:
+            - unique
+            - not_null
+        - name: location_id
+          description: Unique location identifier (e.g. summerville_sc)
+          tests:
+            - not_null
+        - name: observation_time
+          description: Timestamp of the weather observation
+          tests:
+            - not_null
+        - name: data_resolution
+          description: Resolution of data - '15min' or 'hourly'
+          tests:
+            - accepted_values: 
+                arguments:
+                  values: ['15min', 'hourly']
+    - name: air_quality_observations
+      description: >
+        Raw hourly air quality observations from Open-Meteo Air Quality API.
+        Includes US AQI, European AQI, particulates, gases, and pollen data.
+      columns:
+        - name: id
+          description: Auto-incrementing surrogate key
+          tests:
+            - unique
+            - not_null
+        - name: location_id
+          description: Unique location identifier
+          tests:
+            - not_null
+        - name: observation_time
+          description: Timestamp of the observation
+          tests:
+            - not_null

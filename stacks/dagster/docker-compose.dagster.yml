@@ -1,0 +1,116 @@
+services:
+
+  # ── User-code gRPC server ──────────────────────────────────────────────────
+  # Serves job/schedule/sensor definitions to the webserver and daemon.
+  # Rebuild this container to pick up code changes; webserver/daemon don't need restarts.
+  dagster-user-code:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    image: ppd-dagster:latest
+    container_name: dagster-user-code
+    hostname: dagster-user-code
+    command: dagster api grpc -h 0.0.0.0 -p 4000 -m dagster_ppd
+    environment:
+      - DAGSTER_HOME=/opt/dagster/dagster_home
+      - DAGSTER_DB_NAME=${DAGSTER_DB_NAME}
+      # Analytics DB
+      - ANALYTICS_DB_HOST=postgres
+      - ANALYTICS_DB_PORT=5432
+      - ANALYTICS_DB_NAME=${ANALYTICS_DB_NAME}
+      - ANALYTICS_DB_USER=${ANALYTICS_DB_USER}
+      - ANALYTICS_DB_PASSWORD=${ANALYTICS_DB_PASSWORD}
+      - ANALYTICS_DB_URI=postgresql://${ANALYTICS_DB_USER}:${ANALYTICS_DB_PASSWORD}@postgres:5432/${ANALYTICS_DB_NAME}
+      # ESPN DB
+      - ESPN_DB_HOST=postgres
+      - ESPN_DB_PORT=5432
+      - ESPN_DB_NAME=${ESPN_DB_NAME}
+      - ESPN_DB_USER=${ESPN_DB_USER}
+      - ESPN_DB_PASSWORD=${ESPN_DB_PASSWORD}
+      - ESPN_DB_URI=postgresql://${ESPN_DB_USER}:${ESPN_DB_PASSWORD}@postgres:5432/${ESPN_DB_NAME}
+      # Airbyte
+      - AIRBYTE_HOST=${AIRBYTE_HOST}
+      - AIRBYTE_PORT=${AIRBYTE_PORT}
+      - AIRBYTE_CLIENT_ID=${AIRBYTE_CLIENT_ID}
+      - AIRBYTE_CLIENT_SECRET=${AIRBYTE_CLIENT_SECRET}
+      # dbt
+      - DBT_PROFILES_DIR=/opt/airflow/.dbt
+      # ESPN season config (override to tune ingest range)
+      - ESPN_SEASON=${ESPN_SEASON:-2025}
+      - ESPN_SEASON_TYPE=${ESPN_SEASON_TYPE:-2}
+      - ESPN_WEEK_START=${ESPN_WEEK_START:-1}
+      - ESPN_WEEK_END=${ESPN_WEEK_END:-18}
+      # DFS / DK
+      - DK_INBOX=${DK_INBOX:-/data/inbox}
+      - DK_ARCHIVE=${DK_ARCHIVE:-/data/archive}
+      - DK_ERROR=${DK_ERROR:-/data/error}
+      - DK_SCHEMA=${DK_SCHEMA:-nfl_dfs}
+      # Email alerts
+      - GMAIL_APP_USER=${GMAIL_APP_USER}
+      - GMAIL_APP_PASSWORD=${GMAIL_APP_PASSWORD}
+    volumes:
+      - ./dagster_home:/opt/dagster/dagster_home
+      # Reuse the existing Airflow job scripts (read-only)
+      - /opt/ppd/stacks/airflow/airflow/jobs:/opt/airflow/jobs:ro
+      - /opt/ppd/stacks/airflow/airflow/sql:/opt/airflow/sql:ro
+      # dbt projects and artifacts (same mounts as Airflow)
+      - /opt/ppd/stacks/airflow/airflow/dbt:/opt/airflow/dbt:rw
+      - /opt/ppd/stacks/airflow/airflow/dbt_artifacts:/opt/airflow/dbt_artifacts:rw
+      - /opt/airflow/.dbt:/opt/airflow/.dbt:ro
+      - /opt/ppd/stacks/dbt/project:/opt/airflow/dbt/health:rw
+      - /opt/dbt-docs:/opt/dbt-docs:rw
+      # DK data folders
+      - /opt/ppd/data:/data
+    restart: unless-stopped
+    networks:
+      - core_data_net
+
+  # ── Dagster Webserver (UI) ─────────────────────────────────────────────────
+  dagster-webserver:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    image: ppd-dagster:latest
+    container_name: dagster-webserver
+    hostname: dagster-webserver
+    depends_on:
+      - dagster-user-code
+    command: dagster-webserver -h 0.0.0.0 -p 3000 -w /opt/dagster/dagster_home/workspace.yaml
+    environment:
+      - DAGSTER_HOME=/opt/dagster/dagster_home
+      - DAGSTER_DB_NAME=${DAGSTER_DB_NAME}
+      - ANALYTICS_DB_USER=${ANALYTICS_DB_USER}
+      - ANALYTICS_DB_PASSWORD=${ANALYTICS_DB_PASSWORD}
+    ports:
+      - "13000:3000"
+    volumes:
+      - ./dagster_home:/opt/dagster/dagster_home
+    restart: unless-stopped
+    networks:
+      - core_data_net
+
+  # ── Dagster Daemon (schedules + sensors) ──────────────────────────────────
+  dagster-daemon:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    image: ppd-dagster:latest
+    container_name: dagster-daemon
+    hostname: dagster-daemon
+    depends_on:
+      - dagster-user-code
+    command: dagster-daemon run -w /opt/dagster/dagster_home/workspace.yaml
+    environment:
+      - DAGSTER_HOME=/opt/dagster/dagster_home
+      - DAGSTER_DB_NAME=${DAGSTER_DB_NAME}
+      - ANALYTICS_DB_USER=${ANALYTICS_DB_USER}
+      - ANALYTICS_DB_PASSWORD=${ANALYTICS_DB_PASSWORD}
+    volumes:
+      - ./dagster_home:/opt/dagster/dagster_home
+    restart: unless-stopped
+    networks:
+      - core_data_net
+
+networks:
+  core_data_net:
+    external: true

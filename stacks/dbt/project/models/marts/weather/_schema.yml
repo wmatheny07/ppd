@@ -1,0 +1,61 @@
+version: 2
+
+models:
+  - name: mart_daily_weather_summary
+    description: >
+      Daily aggregated weather and air quality metrics per location.
+      Primary table for Superset dashboards, trend analysis, and
+      correlation with Apple Health data (RHR, HRV, sleep, exercise).
+    columns:
+      - name: location_id
+        tests:
+          - not_null
+      - name: observation_date
+        tests:
+          - not_null
+      - name: exercise_score_avg
+        description: >
+          Average exercise suitability score for the day (0-100).
+          Factors in temperature, wind, precipitation, UV, and humidity.
+      - name: outdoor_health_score_avg
+        description: >
+          Composite outdoor health score combining exercise suitability
+          with air quality and pollen data.
+      - name: pressure_swing_hpa
+        description: >
+          Maximum barometric pressure swing within the day.
+          Large swings (>10 hPa) may correlate with migraine and joint pain.
+
+  - name: mart_location_comparison
+    description: >
+      Daily weather with cross-location rankings and deltas.
+      Compares each location against Summerville (home base).
+    columns:
+      - name: location_id
+        tests:
+          - not_null
+      - name: observation_date
+        tests:
+          - not_null
+      - name: temp_delta_vs_home_f
+        description: Temperature difference vs Summerville, SC
+      - name: aqi_delta_vs_home
+        description: AQI difference vs Summerville, SC
+
+  - name: mart_health_weather_alerts
+    description: >
+      Hourly health-relevant weather alerts. Only rows with at least
+      one active alert are included. Alert severity scored 0-10.
+      Key use cases: exercise planning (BBC), eldercare monitoring
+      (Clifton Forge), and respiratory health tracking.
+    columns:
+      - name: location_id
+        tests:
+          - not_null
+      - name: observation_hour
+        tests:
+          - not_null
+      - name: alert_severity_score
+        description: Composite severity (0-10). Higher = more concerning.
+        tests:
+          - not_null

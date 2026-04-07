@@ -53,3 +53,11 @@ data/
 **/superset_home/.cache/
 **/superset_home/.local/
 **/.cache/
+
+# dagster runtime
+stacks/dagster/dagster_home/storage/
+stacks/dagster/dagster_home/.logs_queue/
+stacks/dagster/dagster_home/.nux/
+
+# elementary (edr)
+**/edr_target/

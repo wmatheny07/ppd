@@ -42,34 +42,34 @@ def on_failure(context):
         """,
     )
 
-def on_success(context):
-    dag_run = context["dag_run"]
-    stats = XCom.get_one(
-        run_id=dag_run.run_id,
-        task_id="trigger_airbyte_sync",
-        key="airbyte_stats",
-        dag_id="health_data_pipeline",
-        include_prior_dates=False,
-    ) or {}
-    rows_synced = stats.get("rowsSynced", stats.get("recordsSynced", "N/A"))
-    bytes_synced = stats.get("bytesSynced", "N/A")
-    if isinstance(bytes_synced, (int, float)):
-        bytes_synced = f"{bytes_synced / 1_048_576:.2f} MB" if bytes_synced > 0 else "0 MB"
+# def on_success(context):
+#     dag_run = context["dag_run"]
+#     stats = XCom.get_one(
+#         run_id=dag_run.run_id,
+#         task_id="trigger_airbyte_sync",
+#         key="airbyte_stats",
+#         dag_id="health_data_pipeline",
+#         include_prior_dates=False,
+#     ) or {}
+#     rows_synced = stats.get("rowsSynced", stats.get("recordsSynced", "N/A"))
+#     bytes_synced = stats.get("bytesSynced", "N/A")
+#     if isinstance(bytes_synced, (int, float)):
+#         bytes_synced = f"{bytes_synced / 1_048_576:.2f} MB" if bytes_synced > 0 else "0 MB"
 
-    send_email(
-        to="wmatheny07@gmail.com",
-        subject="✅ health_data_pipeline succeeded",
-        html_content=f"""
-        <b>DAG:</b> health_data_pipeline<br>
-        <b>Completed:</b> {_fmt(context['execution_date'])}<br>
-        <br>
-        <b>Airbyte Sync Results:</b><br>
-        <ul>
-            <li>Rows synced: {rows_synced}</li>
-            <li>Bytes synced: {bytes_synced}</li>
-        </ul>
-        """,
-    )
+#     send_email(
+#         to="wmatheny07@gmail.com",
+#         subject="✅ health_data_pipeline succeeded",
+#         html_content=f"""
+#         <b>DAG:</b> health_data_pipeline<br>
+#         <b>Completed:</b> {_fmt(context['execution_date'])}<br>
+#         <br>
+#         <b>Airbyte Sync Results:</b><br>
+#         <ul>
+#             <li>Rows synced: {rows_synced}</li>
+#             <li>Bytes synced: {bytes_synced}</li>
+#         </ul>
+#         """,
+#     )
 
 with DAG(
     dag_id="health_data_pipeline",
@@ -79,7 +79,6 @@ with DAG(
     start_date=datetime(2025, 1, 1),
     catchup=False,
     max_active_runs=1,
-    on_success_callback=on_success,
     on_failure_callback=on_failure,
     tags=["health", "dbt", "airbyte"],
 ) as dag:

@@ -1,4 +1,4 @@
-analytics_marts:
+analytics:
   target: prod
   outputs:
     prod:

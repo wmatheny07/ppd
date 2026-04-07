@@ -1,0 +1,176 @@
+# =============================================================================
+# Weather Kafka Pipeline - Docker Compose (KRaft Mode)
+# =============================================================================
+# Integrates with existing PPD data platform stack.
+# Network: core_data_net (shared with postgres, superset, airflow, etc.)
+#
+# Usage:
+#   docker compose -f stacks/weather/docker-compose.weather.yml up -d
+#   docker compose -f stacks/weather/docker-compose.weather.yml down
+# =============================================================================
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # Apache Kafka (KRaft Mode - No ZooKeeper)
+  # ---------------------------------------------------------------------------
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: kafka
+    hostname: kafka
+    ports:
+      - "9092:9092"    # Internal listener (Docker network)
+      - "9094:9094"    # External listener (host machine)
+    environment:
+      # KRaft configuration
+      - KAFKA_NODE_ID=0
+      - KAFKA_PROCESS_ROLES=controller,broker
+      - KAFKA_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
+      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - CLUSTER_ID=wCgQub_XTQi7vMjiXk1izQ
+      # Listeners
+      - KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      # Topic defaults
+      - KAFKA_AUTO_CREATE_TOPICS_ENABLE=false
+      - KAFKA_NUM_PARTITIONS=3
+      - KAFKA_DEFAULT_REPLICATION_FACTOR=1
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
+      # Retention: 7 days / 1 GB per partition
+      - KAFKA_LOG_RETENTION_HOURS=168
+      - KAFKA_LOG_RETENTION_BYTES=1073741824
+      # Performance
+      - KAFKA_HEAP_OPTS=-Xmx512m -Xms256m
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - core_data_net
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Kafka Topic Initialization (runs once, then exits)
+  # ---------------------------------------------------------------------------
+  kafka-init:
+    image: apache/kafka:3.7.0
+    container_name: kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "-c"]
+    command: |
+      "
+      echo '=========================================='
+      echo 'Creating Kafka topics...'
+      echo '=========================================='
+
+      /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists \
+        --topic weather.observations.raw \
+        --partitions 3 \
+        --replication-factor 1 \
+        --config retention.ms=604800000 \
+        --config cleanup.policy=delete
+
+      /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists \
+        --topic weather.air_quality.raw \
+        --partitions 3 \
+        --replication-factor 1 \
+        --config retention.ms=604800000 \
+        --config cleanup.policy=delete
+
+      echo '=========================================='
+      echo 'Topics created successfully:'
+      /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list
+      echo '=========================================='
+      "
+    networks:
+      - core_data_net
+
+  # ---------------------------------------------------------------------------
+  # Kafka UI (Provectus) - proxied via kafka.peakprecisiondata.com
+  # ---------------------------------------------------------------------------
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.2
+    container_name: kafka-ui
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_CLUSTERS_0_NAME: ppd-weather
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      DYNAMIC_CONFIG_ENABLED: "true"
+    networks:
+      - core_data_net
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Weather Producer (Open-Meteo → Kafka)
+  # ---------------------------------------------------------------------------
+  weather-producer:
+    build:
+      context: ./producer
+      dockerfile: Dockerfile
+    container_name: weather-producer
+    depends_on:
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      WEATHER_TOPIC: weather.observations.raw
+      AIR_QUALITY_TOPIC: weather.air_quality.raw
+      POLL_INTERVAL_SECONDS: 900  # 15 minutes
+      LOG_LEVEL: INFO
+    volumes:
+      - ./producer/src:/app/src:ro
+    networks:
+      - core_data_net
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Weather Consumer (Kafka → PostgreSQL raw_weather schema)
+  # ---------------------------------------------------------------------------
+  weather-consumer:
+    build:
+      context: ./consumer
+      dockerfile: Dockerfile
+    container_name: weather-consumer
+    depends_on:
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_GROUP_ID: weather-consumer-group
+      WEATHER_TOPIC: weather.observations.raw
+      AIR_QUALITY_TOPIC: weather.air_quality.raw
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: analytics
+      POSTGRES_USER: ${POSTGRES_USER:-analytics}
+      POSTGRES_PASSWORD: ${ANALYTICS_DB_PASSWORD}
+      POSTGRES_SCHEMA: raw_weather
+      BATCH_SIZE: 100
+      LOG_LEVEL: INFO
+    networks:
+      - core_data_net
+    restart: unless-stopped
+
+volumes:
+  kafka_data:
+    driver: local
+
+networks:
+  core_data_net:
+    external: true
