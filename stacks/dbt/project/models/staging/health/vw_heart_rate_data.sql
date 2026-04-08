@@ -1,4 +1,10 @@
+{{ config (
+    materialized='incremental',
+    unique_key='id'
+) }}
+
 SELECT
+  {{ dbt_utils.generate_surrogate_key(['date', 'person']) }} AS id,
   *
 FROM
   (
@@ -15,3 +21,6 @@ FROM
   )
 WHERE
   metric_name = 'heart_rate'
+  {%  if is_incremental() %}
+  and date::timestamp > (SELECT MAX(date) FROM {{ this }})
+  {% endif %}

@@ -1,0 +1,154 @@
+flowchart TD
+
+  %% ── SOURCES ──────────────────────────────────────────────────────────────
+  subgraph src_weather["Source: raw_weather"]
+    S_WX[(weather_observations)]
+    S_AQ[(air_quality_observations)]
+  end
+
+  subgraph src_health["Source: health"]
+    S_WK[(Workouts)]
+    S_MX[(metrics)]
+  end
+
+  subgraph src_espn["Source: espn_raw (disabled)"]
+    S_EP[(espn_play)]
+    S_EPS[(espn_play_participant_stat)]
+    S_ETS[(espn_play_team_stat)]
+  end
+
+  %% ── STAGING ──────────────────────────────────────────────────────────────
+  subgraph stg["Staging (views)"]
+    subgraph stg_wx["Weather"]
+      STG_WX[stg_weather_observations]
+      STG_AQ[stg_air_quality_observations]
+    end
+
+    subgraph stg_h["Health"]
+      STG_WKT[vw_workouts]
+      STG_AE[vw_active_energy]
+      STG_AEB[vw_active_energy_burned]
+      STG_SLP[vw_sleep_metrics]
+      STG_HR[vw_heart_rate_data]
+      STG_RHR[vw_resting_hr_metrics]
+      STG_HRV[vw_hr_variability_metrics]
+      STG_HRR[vw_heart_rate_recovery]
+      STG_AEM[vw_active_energy_metrics]
+      STG_BEM[vw_basal_energy_metrics]
+      STG_DM[vw_distance_metrics]
+      STG_PEM[vw_physical_effort_metrics]
+      STG_RT[vw_routes]
+      STG_SCM[vw_step_count_metrics]
+      STG_WAD[vw_walking_and_running_distance]
+      STG_WSM[vw_walking_speed_metrics]
+      STG_WST[vw_walking_step_metrics]
+    end
+
+    subgraph stg_e["ESPN (disabled)"]
+      STG_EP[stg_espn_play]
+      STG_EPS[stg_espn_play_participant_stat]
+      STG_ETS[stg_espn_play_team_stat]
+    end
+  end
+
+  %% ── INTERMEDIATE ─────────────────────────────────────────────────────────
+  subgraph int["Intermediate (views)"]
+    INT_HC[int_weather_hourly_conditions]
+    INT_AQC[int_weather_air_quality_combined]
+  end
+
+  %% ── MARTS ────────────────────────────────────────────────────────────────
+  subgraph marts["Marts (tables)"]
+    subgraph mart_wx["Weather"]
+      MRT_DWS[mart_daily_weather_summary]
+      MRT_LC[mart_location_comparison]
+      MRT_HA[mart_health_weather_alerts]
+    end
+
+    subgraph mart_h["Health"]
+      FCT_WS[fct_workout_summary]
+      FCT_AES[fct_active_energy_summary]
+      FCT_WTA[fct_workout_time_adj]
+      FCT_SM[fct_sleep_metrics]
+      FCT_DS[fct_dim_sleep]
+      FCT_SC[fct_sleep_calories]
+      FCT_HZ[fct_hr_zones]
+      FCT_RHR[fct_resting_hr]
+    end
+
+    subgraph mart_e["ESPN (disabled)"]
+      FCT_EP[fct_espn_play]
+      FCT_EPS[fct_espn_play_participant_stat]
+      FCT_ETS[fct_espn_play_team_stat]
+    end
+  end
+
+  %% ── WEATHER LINEAGE ──────────────────────────────────────────────────────
+  S_WX --> STG_WX
+  S_AQ --> STG_AQ
+
+  STG_WX --> INT_HC
+  INT_HC --> INT_AQC
+  STG_AQ --> INT_AQC
+
+  INT_AQC --> MRT_DWS
+  INT_AQC --> MRT_HA
+  MRT_DWS --> MRT_LC
+
+  %% ── HEALTH LINEAGE ───────────────────────────────────────────────────────
+  S_WK --> STG_WKT
+  S_WK --> STG_AE
+  S_WK --> STG_AEB
+
+  S_MX --> STG_SLP
+  S_MX --> STG_HR
+  S_MX --> STG_RHR
+  S_MX --> STG_HRV
+  S_MX --> STG_HRR
+  S_MX --> STG_AEM
+  S_MX --> STG_BEM
+  S_MX --> STG_DM
+  S_MX --> STG_PEM
+  S_MX --> STG_RT
+  S_MX --> STG_SCM
+  S_MX --> STG_WAD
+  S_MX --> STG_WSM
+  S_MX --> STG_WST
+
+  STG_AEB --> FCT_AES
+  STG_AE  --> FCT_AES
+  STG_AE  --> FCT_WTA
+
+  STG_WKT --> FCT_WS
+  FCT_AES --> FCT_WS
+  FCT_WTA --> FCT_WS
+
+  STG_SLP --> FCT_SM
+  STG_SLP --> FCT_DS
+  STG_SLP --> FCT_SC
+  FCT_WS  --> FCT_SC
+
+  STG_HR  --> FCT_HZ
+  FCT_WS  --> FCT_HZ
+
+  STG_RHR --> FCT_RHR
+
+  %% ── ESPN LINEAGE ─────────────────────────────────────────────────────────
+  S_EP  --> STG_EP  --> FCT_EP
+  S_EPS --> STG_EPS --> FCT_EPS
+  S_ETS --> STG_ETS --> FCT_ETS
+
+  %% ── STYLES ───────────────────────────────────────────────────────────────
+  classDef source   fill:#f0f4ff,stroke:#6b7cb3,color:#1a1a2e
+  classDef staging  fill:#e8f5e9,stroke:#4caf50,color:#1b5e20
+  classDef intermed fill:#fff8e1,stroke:#f9a825,color:#33270c
+  classDef mart     fill:#fce4ec,stroke:#e91e63,color:#3e0019
+  classDef disabled fill:#f5f5f5,stroke:#bdbdbd,color:#9e9e9e,stroke-dasharray:4 3
+
+  class S_WX,S_AQ,S_WK,S_MX source
+  class S_EP,S_EPS,S_ETS disabled
+  class STG_WX,STG_AQ,STG_WKT,STG_AE,STG_AEB,STG_SLP,STG_HR,STG_RHR,STG_HRV,STG_HRR,STG_AEM,STG_BEM,STG_DM,STG_PEM,STG_RT,STG_SCM,STG_WAD,STG_WSM,STG_WST staging
+  class STG_EP,STG_EPS,STG_ETS disabled
+  class INT_HC,INT_AQC intermed
+  class MRT_DWS,MRT_LC,MRT_HA,FCT_WS,FCT_AES,FCT_WTA,FCT_SM,FCT_DS,FCT_SC,FCT_HZ,FCT_RHR mart
+  class FCT_EP,FCT_EPS,FCT_ETS disabled

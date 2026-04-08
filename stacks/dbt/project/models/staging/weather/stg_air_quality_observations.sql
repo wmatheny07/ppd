@@ -12,12 +12,9 @@ with source as (
 deduplicated as (
 
     select
-        *,
-        row_number() over (
-            partition by location_id, observation_time, data_resolution
-            order by loaded_at desc
-        ) as _row_num
+       distinct on (location_id, observation_time, data_resolution) *
     from source
+    order by location_id, observation_time, data_resolution, loaded_at desc
 
 ),
 
@@ -78,7 +75,6 @@ cleaned as (
         ragweed_pollen              as pollen_ragweed
 
     from deduplicated
-    where _row_num = 1
 
 )
 

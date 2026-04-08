@@ -1,4 +1,10 @@
+{{ config(
+    materialized='incremental',
+    unique_key=['record_date', 'person']
+) }}
+
 SELECT
+  {{ dbt_utils.generate_surrogate_key(['date', 'person']) }} AS id,
   "date"::date AS record_date,
   person,
   rem::float AS rem,
@@ -29,5 +35,8 @@ FROM
   )
 WHERE
   metric_name = 'sleep_analysis'
+  {% if is_incremental() %}
+    AND {{ dbt_utils.generate_surrogate_key(['date', 'person']) }} NOT IN (SELECT id FROM {{ this }})
+  {% endif %}
 ORDER BY
   "date"

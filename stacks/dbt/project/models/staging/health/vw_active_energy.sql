@@ -1,5 +1,10 @@
+{{ config(
+    materialized='incremental',
+    unique_key='id'
+) }}
+
 SELECT
-  id,
+  {{ dbt_utils.generate_surrogate_key(['id','person','date']) }} AS id,
   person,
   data_source,
   qty,
@@ -65,4 +70,7 @@ FROM
           LATERAL JSONB_ARRAY_ELEMENTS(w.data -> 'workouts') AS workout,
           LATERAL JSONB_ARRAY_ELEMENTS(workout -> 'activeEnergy') AS energy_entry
       ) data
-  ) data_mv
+  ) data_m
+{% if is_incremental() %}
+WHERE date::timestamp > (SELECT MAX(date) FROM {{ this }})
+{% endif %}
