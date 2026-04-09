@@ -4,11 +4,11 @@
 # Dagster reads these manifests at import time to expose models as software-defined assets.
 set -e
 
-PROFILES_DIR="/opt/airflow/.dbt"
-ARTIFACTS_DIR="/opt/airflow/dbt_artifacts"
+PROFILES_DIR="/opt/dbt/profiles"
+ARTIFACTS_DIR="/opt/dagster/dbt_artifacts"
 
 for project in health; do
-    project_dir="/opt/airflow/dbt/${project}"
+    project_dir="/opt/dagster/dbt/${project}"
     manifest_dir="${ARTIFACTS_DIR}/${project}"
 
     if [ -f "${project_dir}/dbt_project.yml" ] && [ -d "${PROFILES_DIR}" ]; then

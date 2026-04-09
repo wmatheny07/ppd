@@ -7,7 +7,7 @@ select
         resting_heart_rate
         from
             {{ ref('vw_resting_hr_metrics') }}
-        {% if is_incremental() %}
+        {%- if is_incremental() %}
         where
-        record_date > (SELECT MAX(record_date) FROM {{ this }})
+        record_date::date > (SELECT MAX(record_date::date) FROM {{ this }})
         {% endif %}

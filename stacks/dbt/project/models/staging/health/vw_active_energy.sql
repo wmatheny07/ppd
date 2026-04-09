@@ -71,6 +71,6 @@ FROM
           LATERAL JSONB_ARRAY_ELEMENTS(workout -> 'activeEnergy') AS energy_entry
       ) data
   ) data_m
-{% if is_incremental() %}
-WHERE date::timestamp > (SELECT MAX(date) FROM {{ this }})
+{%- if is_incremental() %}
+WHERE date::timestamp > (SELECT MAX(date::timestamp) FROM {{ this }})
 {% endif %}

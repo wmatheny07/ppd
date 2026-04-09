@@ -12,11 +12,10 @@ Required env vars:
 from __future__ import annotations
 
 import os
-import smtplib
 import subprocess
 import time
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
+
+import resend
 
 import requests
 from dagster import (
@@ -31,9 +30,10 @@ from dagster import (
 )
 
 AIRBYTE_CONNECTION_ID = "8e8d970b-4d1c-4e36-96c7-394865abace7"
-DBT_PROJECT_DIR = "/opt/airflow/dbt/health"
-DBT_PROFILES_DIR = "/opt/airflow/.dbt"
-DBT_ARTIFACTS_DIR = "/opt/airflow/dbt_artifacts"
+DBT_PROJECT_DIR = "/opt/dagster/dbt/health"
+DBT_PROFILES_DIR = os.environ.get("DBT_PROFILES_DIR", "/opt/dbt/profiles")
+DBT_ARTIFACTS_DIR = "/opt/dagster/dbt_artifacts"
+DBT_STATE_DIR = f"{DBT_ARTIFACTS_DIR}/state"
 
 COMMON_ENV = {
     **os.environ,
@@ -47,31 +47,26 @@ COMMON_ENV = {
 
 @failure_hook
 def health_pipeline_failure_alert(context):
-    """Send a Gmail alert when any op in health_pipeline_job fails."""
-    smtp_user = os.environ.get("GMAIL_APP_USER", "")
-    smtp_pass = os.environ.get("GMAIL_APP_PASSWORD", "")
-    if not smtp_user or not smtp_pass:
+    """Send a Resend alert when any op in health_pipeline_job fails."""
+    api_key = os.environ.get("RESEND_API_KEY", "")
+    if not api_key:
         return
 
     op_name = context.op.name
     run_id = context.run_id
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"health_pipeline_job failed — {op_name}"
-    msg["From"] = smtp_user
-    msg["To"] = "wmatheny07@gmail.com"
-    body = f"""
-    <b>Job:</b> health_pipeline_job<br>
-    <b>Op:</b> {op_name}<br>
-    <b>Run ID:</b> {run_id}<br>
-    """
-    msg.attach(MIMEText(body, "html"))
-
     try:
-        with smtplib.SMTP("smtp.gmail.com", 587) as server:
-            server.starttls()
-            server.login(smtp_user, smtp_pass)
-            server.sendmail(smtp_user, "wmatheny07@gmail.com", msg.as_string())
+        resend.api_key = api_key
+        resend.Emails.send({
+            "from": "alerts@peakprecisiondata.com",
+            "to": "wmatheny07@gmail.com",
+            "subject": f"health_pipeline_job failed — {op_name}",
+            "html": f"""
+            <b>Job:</b> health_pipeline_job<br>
+            <b>Op:</b> {op_name}<br>
+            <b>Run ID:</b> {run_id}<br>
+            """,
+        })
     except Exception as exc:
         get_dagster_logger().warning(f"Failed to send failure email: {exc}")
 
@@ -148,6 +143,49 @@ def dbt_deps_health(context):
 
 
 @op(ins={"start": In(Nothing)}, out=Out(Nothing))
+def promote_freshness_state(context):
+    """Snapshot current sources.json → state/ before running freshness.
+    No-op on bootstrap when no sources.json exists yet."""
+    logger = get_dagster_logger()
+    logger.info("Promoting sources.json to state/")
+    subprocess.run(
+        f"""
+        mkdir -p {DBT_STATE_DIR}
+        if [ -f {DBT_ARTIFACTS_DIR}/target/sources.json ]; then
+            cp {DBT_ARTIFACTS_DIR}/target/sources.json {DBT_STATE_DIR}/sources.json
+            echo "Promoted sources.json to state/"
+        else
+            echo "No sources.json found — skipping promotion (bootstrap run)"
+        fi
+        """,
+        shell=True,
+        check=True,
+        executable="/bin/bash",
+    )
+
+
+@op(ins={"start": In(Nothing)}, out=Out(Nothing))
+def dbt_source_freshness(context):
+    logger = get_dagster_logger()
+    logger.info("Checking dbt source freshness")
+    subprocess.run(
+        f"""
+        set -euo pipefail
+        cd {DBT_PROJECT_DIR}
+        mkdir -p {DBT_ARTIFACTS_DIR}/logs {DBT_ARTIFACTS_DIR}/target
+        dbt source freshness \
+            --profiles-dir {DBT_PROFILES_DIR} \
+            --target-path {DBT_ARTIFACTS_DIR}/target \
+            --log-path {DBT_ARTIFACTS_DIR}/logs
+        """,
+        shell=True,
+        check=True,
+        executable="/bin/bash",
+        env=COMMON_ENV,
+    )
+
+
+@op(ins={"start": In(Nothing)}, out=Out(Nothing))
 def dbt_build_health_marts(context):
     logger = get_dagster_logger()
     logger.info("Running dbt build for health marts")
@@ -156,12 +194,23 @@ def dbt_build_health_marts(context):
         set -euo pipefail
         cd {DBT_PROJECT_DIR}
         mkdir -p {DBT_ARTIFACTS_DIR}/logs {DBT_ARTIFACTS_DIR}/target
-        dbt build \
-            --profiles-dir {DBT_PROFILES_DIR} \
-            --target-path {DBT_ARTIFACTS_DIR}/target \
-            --log-path {DBT_ARTIFACTS_DIR}/logs \
-            --select "staging.health marts.health elementary" \
-            --exclude "mv_espn_play_stat"
+        if [ -f {DBT_STATE_DIR}/sources.json ]; then
+            echo "State found — building fresher sources only"
+            dbt build \
+                --profiles-dir {DBT_PROFILES_DIR} \
+                --target-path {DBT_ARTIFACTS_DIR}/target \
+                --log-path {DBT_ARTIFACTS_DIR}/logs \
+                --select "source_status:fresher+" \
+                --state {DBT_STATE_DIR}
+        else
+            echo "No state found — full build (bootstrap run)"
+            dbt build \
+                --profiles-dir {DBT_PROFILES_DIR} \
+                --target-path {DBT_ARTIFACTS_DIR}/target \
+                --log-path {DBT_ARTIFACTS_DIR}/logs \
+                --select "staging.health marts.health" \
+                --exclude "mv_espn_play_stat"
+        fi
         """,
         shell=True,
         check=True,
@@ -193,21 +242,21 @@ def dbt_docs_generate(context):
     )
 
 
-@op(ins={"start": In(Nothing)})
-def edr_report(context):
-    logger = get_dagster_logger()
-    logger.info("Running Elementary data monitoring report")
-    subprocess.run(
-        f"""
-        set -euo pipefail
-        edr monitor report --profiles-dir {DBT_PROFILES_DIR}
-        cp {DBT_PROJECT_DIR}/elementary.html /opt/dbt-docs/elementary_report.html
-        """,
-        shell=True,
-        check=True,
-        executable="/bin/bash",
-        env=COMMON_ENV,
-    )
+# @op(ins={"start": In(Nothing)})
+# def edr_report(context):
+#     logger = get_dagster_logger()
+#     logger.info("Running Elementary data monitoring report")
+#     subprocess.run(
+#         f"""
+#         set -euo pipefail
+#         edr monitor report --profiles-dir {DBT_PROFILES_DIR}
+#         cp {DBT_PROJECT_DIR}/elementary.html /opt/dbt-docs/elementary_report.html
+#         """,
+#         shell=True,
+#         check=True,
+#         executable="/bin/bash",
+#         env=COMMON_ENV,
+#     )
 
 
 @job(
@@ -217,7 +266,7 @@ def edr_report(context):
 def health_pipeline_job():
     synced = trigger_airbyte_sync()
     deps_done = dbt_deps_health(synced)
-    built = dbt_build_health_marts(deps_done)
-    # docs and edr run in parallel after dbt build
+    promoted = promote_freshness_state(deps_done)
+    fresh = dbt_source_freshness(promoted)
+    built = dbt_build_health_marts(fresh)
     dbt_docs_generate(built)
-    edr_report(built)

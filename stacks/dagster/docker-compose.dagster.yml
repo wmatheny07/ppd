@@ -34,7 +34,7 @@ services:
       - AIRBYTE_CLIENT_ID=${AIRBYTE_CLIENT_ID}
       - AIRBYTE_CLIENT_SECRET=${AIRBYTE_CLIENT_SECRET}
       # dbt
-      - DBT_PROFILES_DIR=/opt/airflow/.dbt
+      - DBT_PROFILES_DIR=/opt/dbt/profiles
       # ESPN season config (override to tune ingest range)
       - ESPN_SEASON=${ESPN_SEASON:-2025}
       - ESPN_SEASON_TYPE=${ESPN_SEASON_TYPE:-2}
@@ -46,19 +46,15 @@ services:
       - DK_ERROR=${DK_ERROR:-/data/error}
       - DK_SCHEMA=${DK_SCHEMA:-nfl_dfs}
       # Email alerts
-      - GMAIL_APP_USER=${GMAIL_APP_USER}
-      - GMAIL_APP_PASSWORD=${GMAIL_APP_PASSWORD}
+      - RESEND_API_KEY=${RESEND_API_KEY}
     volumes:
       - ./dagster_home:/opt/dagster/dagster_home
-      # Reuse the existing Airflow job scripts (read-only)
-      - /opt/ppd/stacks/airflow/airflow/jobs:/opt/airflow/jobs:ro
-      - /opt/ppd/stacks/airflow/airflow/sql:/opt/airflow/sql:ro
-      # dbt projects and artifacts (same mounts as Airflow)
-      - /opt/ppd/stacks/airflow/airflow/dbt:/opt/airflow/dbt:rw
-      - /opt/ppd/stacks/airflow/airflow/dbt_artifacts:/opt/airflow/dbt_artifacts:rw
-      - /opt/airflow/.dbt:/opt/airflow/.dbt:ro
-      - /opt/ppd/stacks/dbt/project:/opt/airflow/dbt/health:rw
+      - ./project:/opt/dagster/app
+      # dbt projects and artifacts
+      - /opt/ppd/stacks/dbt/project:/opt/dagster/dbt/health:rw
+      - /opt/ppd/stacks/dbt/dbt_artifacts:/opt/dagster/dbt_artifacts:rw
       - /opt/dbt-docs:/opt/dbt-docs:rw
+      - /opt/ppd/stacks/dbt/profiles:/opt/dbt/profiles:ro
       # DK data folders
       - /opt/ppd/data:/data
     restart: unless-stopped

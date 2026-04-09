@@ -15,8 +15,8 @@ import subprocess
 import psycopg2
 from dagster import In, Nothing, Out, get_dagster_logger, job, op
 
-JOBS_DIR = "/opt/airflow/jobs"
-SQL_DIR = "/opt/airflow/sql"
+JOBS_DIR = "/opt/dagster/jobs"
+SQL_DIR = "/opt/dagster/sql"
 
 
 def _analytics_uri() -> str:

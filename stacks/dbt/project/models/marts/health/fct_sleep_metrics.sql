@@ -1,6 +1,7 @@
 {{ config(materialized='incremental', unique_key=['record_date', 'person']) }}
 
 SELECT
+  {{ dbt_utils.generate_surrogate_key(['person', 'record_date']) }} id,
   record_date,
   person,
   rem,

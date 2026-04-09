@@ -19,7 +19,7 @@ import subprocess
 
 from dagster import In, Nothing, Out, get_dagster_logger, job, op
 
-JOBS_DIR = "/opt/airflow/jobs"
+JOBS_DIR = "/opt/dagster/jobs"
 
 
 @op(out=Out(Nothing))

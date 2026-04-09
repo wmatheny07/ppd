@@ -1,4 +1,4 @@
-{{ config(materialized='incremental', unique_key='id') }}
+{{ config(materialized='incremental', unique_key=['person','workout_type','workout_start','workout_end']) }}
 
 SELECT
   id,
@@ -41,7 +41,9 @@ FROM
     FROM
       (
         SELECT DISTINCT
-          ON (DATE_TRUNC('minute', vw.start)) ves.id,
+          ON 
+          ( {{ dbt_utils.generate_surrogate_key(['vw.person', 'vw.workout_type', 'to_char(vw.start, \'MM/DD/YYYY HH:MI:SS\')']) }} )
+          {{ dbt_utils.generate_surrogate_key(['vw.person', 'vw.workout_type', 'to_char(vw.start, \'MM/DD/YYYY HH:MI:SS\')']) }} id,
           vw.person,
           vw.workout_type,
           vw.start AS start_time,
@@ -74,18 +76,12 @@ FROM
           LEFT JOIN {{ ref('fct_active_energy_summary') }} ves ON vw.id = ves.id
         WHERE
           {% if is_incremental() %}
-          vw.start > (SELECT MAX(workout_start) FROM {{ this }})
+          vw.start::timestamp > (SELECT MAX(workout_start::timestamp) FROM {{ this }})
           {% else %}
           1 = 1
           {% endif %}
         ORDER BY
-          DATE_TRUNC('minute', vw.start),
-          CASE
-            WHEN data_source = 'Wesley''s Apple Watch' THEN 'A'
-            WHEN data_source = 'Wesley''s Apple Watch|iFIT' THEN 'B'
-            ELSE 'C'
-          END,
-          end_time
+          {{ dbt_utils.generate_surrogate_key(['vw.person', 'vw.workout_type', 'to_char(vw.start, \'MM/DD/YYYY HH:MI:SS\')']) }}
       ) summary
   )
 ORDER BY

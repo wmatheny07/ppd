@@ -16,7 +16,7 @@ from pathlib import Path
 from dagster import AssetExecutionContext
 from dagster_dbt import DbtCliResource, dbt_assets
 
-HEALTH_MANIFEST = Path("/opt/airflow/dbt_artifacts/health/target/manifest.json")
+HEALTH_MANIFEST = Path("/opt/dagster/dbt_artifacts/health/target/manifest.json")
 
 
 @dbt_assets(

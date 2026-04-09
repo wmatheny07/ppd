@@ -12,8 +12,8 @@ FROM
   {{ ref('vw_sleep_metrics') }}
 WHERE
   total_sleep > 0
-  {% if is_incremental() %}
-  AND record_date > (SELECT MAX(record_date) FROM {{ this }})
+  {%- if is_incremental() %}
+  AND record_date::date > (SELECT MAX(record_date::date) FROM {{ this }})
   {% endif %}
 {% if not loop.last %}
 UNION ALL

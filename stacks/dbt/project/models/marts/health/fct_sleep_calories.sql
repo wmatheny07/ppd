@@ -17,6 +17,6 @@ FROM
         GROUP BY
             date (workout_start)
     ) cals_burned ON vsm.record_date = cals_burned.record_date
-{% if is_incremental() %}
-WHERE vsm.record_date::timestamp > (SELECT MAX(record_date::timestamp) FROM {{ this }})
+{%- if is_incremental() %}
+WHERE vsm.record_date::date > (SELECT MAX(record_date::date) FROM {{ this }})
 {% endif %}

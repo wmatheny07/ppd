@@ -10,7 +10,7 @@ SELECT
 FROM
   {{ ref('vw_active_energy') }}
 {% if is_incremental() %}
-WHERE date::timestamp > (SELECT MAX(end_time) FROM {{ this }})
+WHERE date::timestamp > (SELECT MAX(end_time::timestamp) FROM {{ this }})
 {% endif %}
 GROUP BY
   id,

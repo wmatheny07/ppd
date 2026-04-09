@@ -21,6 +21,6 @@ FROM
   )
 WHERE
   metric_name = 'heart_rate'
-  {%  if is_incremental() %}
-  and date::timestamp > (SELECT MAX(date) FROM {{ this }})
+  {%-  if is_incremental() %}
+  and date::timestamp > (SELECT MAX(date::timestamp) FROM {{ this }})
   {% endif %}

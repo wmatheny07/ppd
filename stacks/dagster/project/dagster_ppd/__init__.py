@@ -14,15 +14,15 @@ from .schedules import (
     weather_pipeline_schedule,
 )
 
-DBT_PROFILES_DIR = "/opt/airflow/.dbt"
+DBT_PROFILES_DIR = "/opt/dbt/profiles"
 
 # Shared DbtCliResource — both health and weather models live in the same
-# analytics project (/opt/airflow/dbt/health), so they share one resource
+# analytics project (/opt/dagster/dbt/health), so they share one resource
 # and one manifest. Weather assets are distinguished by tag:weather selection.
 _health_dbt = DbtCliResource(
-    project_dir="/opt/airflow/dbt/health",
+    project_dir="/opt/dagster/dbt/health",
     profiles_dir=DBT_PROFILES_DIR,
-    target_path="/opt/airflow/dbt_artifacts/health/target",
+    target_path="/opt/dagster/dbt_artifacts/health/target",
 )
 
 defs = Definitions(

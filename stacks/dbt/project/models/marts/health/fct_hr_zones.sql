@@ -22,7 +22,7 @@ WITH
         vhrd."date"::timestamp between date_trunc('minute', workout_start::timestamp) and workout_end::timestamp
       CROSS JOIN constants
     {% if is_incremental() %}
-    WHERE date(vhrd."date") > (SELECT MAX(record_date) FROM {{ this }})
+    WHERE vhrd."date"::date > (SELECT MAX(record_date::date) FROM {{ this }})
     {% endif %}
   ),
   zones AS (
