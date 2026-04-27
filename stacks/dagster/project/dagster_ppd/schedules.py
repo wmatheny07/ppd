@@ -15,6 +15,7 @@ from dagster import ScheduleDefinition
 
 from .jobs.espn_ingest import espn_ingest_job
 from .jobs.health_pipeline import health_pipeline_job
+from .jobs.mail_pipeline import mail_dbt_job
 from .jobs.nfl_dfs_ingest import nfl_dfs_ingest_job
 from .jobs.weather_pipeline import weather_pipeline_job
 
@@ -43,5 +44,12 @@ weather_pipeline_schedule = ScheduleDefinition(
     name="weather_pipeline_schedule",
     job=weather_pipeline_job,
     cron_schedule="*/30 * * * *",   # Every 30 minutes, 24/7
+    execution_timezone="America/New_York",
+)
+
+mail_dbt_schedule = ScheduleDefinition(
+    name="mail_dbt_schedule",
+    job=mail_dbt_job,
+    cron_schedule="*/30 * * * *",   # Every 30 minutes — builds after sensor-driven runs
     execution_timezone="America/New_York",
 )

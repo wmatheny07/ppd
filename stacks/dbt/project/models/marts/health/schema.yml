@@ -5,7 +5,7 @@ models:
   - name: id
     description: "Unique workout session identifier from Apple Health."
   - name: person
-    description: "Person identifier (e.g. wes, ashley)."
+    description: "Person identifier (e.g. wes, amanda)."
     tests: [ not_null ]
   - name: workout_type
     description: "Type of workout activity. Run sessions with < 13 cal/min are reclassified as Hiking."
@@ -163,6 +163,72 @@ models:
   - name: total_calories
     description: "Sum of all active energy intervals for this workout session in kilocalories."
 
+- name: fct_hrv_daily
+  description: "Incremental mart aggregating Apple Watch HRV (SDNN) readings to one row per person per day. Each reading is classified into overnight (during sleep), morning (within 2 hours of wake), or daytime windows by joining against fct_sleep_metrics. Morning HRV is the primary forward-looking recovery signal; overnight HRV pairs with resting heart rate for sleep-window analysis."
+  columns:
+  - name: id
+    description: "Surrogate key derived from record_date and person."
+    tests: [ not_null, unique ]
+  - name: record_date
+    description: "Calendar date of the HRV readings."
+    tests: [ not_null ]
+  - name: person
+    description: "Person identifier."
+    tests: [ not_null ]
+  - name: avg_hrv
+    description: "Average SDNN (ms) across all readings taken on this date, regardless of window. Use for long-term trend lines smoothed by a rolling average."
+    tests:
+    - dbt_utils.accepted_range:
+        arguments:
+          min_value: 1
+          max_value: 300
+  - name: min_hrv
+    description: "Lowest individual SDNN reading recorded on this date."
+  - name: max_hrv
+    description: "Highest individual SDNN reading recorded on this date."
+  - name: reading_count
+    description: "Total number of HRV readings recorded on this date across all windows."
+    tests:
+    - dbt_utils.accepted_range:
+        arguments:
+          min_value: 1
+  - name: morning_avg_hrv
+    description: "Average SDNN (ms) from readings taken within 2 hours of wake time (sleep_end). Primary metric for day-over-day recovery tracking and pre-workout readiness. NULL when no matching sleep session exists or no post-wake reading was captured."
+  - name: morning_reading_count
+    description: "Number of readings in the morning window. Use as a data quality indicator — days with 0 indicate no post-wake readings were captured."
+  - name: overnight_avg_hrv
+    description: "Average SDNN (ms) from readings taken during the sleep session. Best paired with resting_heart_rate for sleep-window analysis, as both metrics are derived from the same rest period."
+  - name: overnight_min_hrv
+    description: "Minimum SDNN reading during the sleep session. A notably low value may indicate a period of reduced autonomic regulation during the night."
+  - name: overnight_reading_count
+    description: "Number of readings captured during the sleep session."
+
+- name: fct_hrv_resting_hr
+  description: "Incremental mart joining daily resting heart rate and overnight HRV per person, limited to days where both signals are present. Intended for scatter plot and correlation analysis — both metrics are derived from the sleep window, making them directly comparable as paired recovery indicators."
+  columns:
+  - name: record_date
+    description: "Date of the record."
+    tests: [ not_null ]
+  - name: person
+    description: "Person identifier."
+    tests: [ not_null ]
+  - name: resting_heart_rate
+    description: "Resting heart rate in BPM as computed by Apple Watch from overnight readings."
+    tests:
+    - not_null
+    - dbt_utils.accepted_range:
+        arguments:
+          min_value: 30
+          max_value: 120
+  - name: overnight_avg_hrv
+    description: "Average SDNN (ms) recorded during the sleep session. Paired with resting_heart_rate as both are measured in the same rest window — the two should move inversely under fatigue and recovery."
+    tests:
+    - not_null
+    - dbt_utils.accepted_range:
+        arguments:
+          min_value: 1
+          max_value: 300
+
 - name: fct_workout_time_adj
   description: "Incremental mart of time-adjusted workout records, filtering outlier sessions based on heart rate percent difference from prior sessions."
   columns:
@@ -176,3 +242,4 @@ models:
     description: "Latest active energy interval date for this workout session."
   - name: updated_end_date
     description: "Corrected end date derived from the interval where the moving average percent difference exceeds 15%, indicating the true workout end."
+

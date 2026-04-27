@@ -1,0 +1,30 @@
+# Mail Intelligence — Python Dependencies
+
+# Dagster core + integrations
+dagster
+dagster-webserver
+dagster-dbt
+dagster-postgres
+
+# dbt
+dbt-core
+dbt-postgres
+
+# Object storage
+boto3                  # MinIO S3-compatible client
+
+# PDF extraction
+pdfplumber             # Digital PDFs (fast, accurate)
+PyMuPDF                # PDF → image conversion for Tesseract
+pytesseract            # OCR for scanned documents
+Pillow                 # Image handling
+python-doctr[torch]    # Optional: better handwriting OCR
+
+# Database
+psycopg2-binary
+
+# AI
+anthropic
+
+# Utilities
+python-dotenv          # Local dev only — use SOPS in production

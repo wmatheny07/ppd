@@ -2,6 +2,10 @@ FROM apache/superset:latest
 
 # Install the Postgres driver into the Superset venv
 USER root
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    chromium chromium-driver \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN /app/.venv/bin/python -m ensurepip --upgrade && \
     /app/.venv/bin/python -m pip install --no-cache-dir psycopg2-binary && \
     chown -R superset:superset /app/.venv

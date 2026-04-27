@@ -2,6 +2,7 @@
 
 SELECT
   id,
+  workout_id,
   person,
   MIN(date::timestamp) start_time,
   MAX(date::timestamp) end_time,
@@ -14,5 +15,6 @@ WHERE date::timestamp > (SELECT MAX(end_time::timestamp) FROM {{ this }})
 {% endif %}
 GROUP BY
   id,
+  workout_id,
   person,
   data_source

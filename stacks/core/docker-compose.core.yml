@@ -1,6 +1,9 @@
 networks:
   core_data_net:
     external: true
+  mathenymanor:
+    name: mathenymanor.docker
+    external: true
 
 volumes:
   postgres_data:
@@ -10,8 +13,24 @@ volumes:
   qdrant_data:
 
 services:
+  redis:
+    container_name: redis
+    image: redis:7.2-bookworm
+    expose:
+      - "6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 30s
+      retries: 50
+      start_period: 30s
+    restart: always
+    networks:
+      - core_data_net
+      - mathenymanor
+
   postgres:
-    image: postgres:16
+    image: pgvector/pgvector:pg16
     container_name: postgres
     environment:
       POSTGRES_USER: analytics
@@ -24,6 +43,13 @@ services:
       - ./postgres/postgres.conf:/etc/postgresql/postgres.conf:ro
     ports:
       - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U analytics -d analytics"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     networks:
       - core_data_net
 
@@ -35,7 +61,7 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     volumes:
-      - minio_data:/data
+      - /media/nasdrive/mail_intelligence/minio:/data
     ports:
       - "9000:9000"
     networks:
@@ -62,24 +88,70 @@ services:
     build:
       context: .
       dockerfile: dockerfile.superset
-    image: superset-with-pg:latest
+    image: superset-with-playwright:latest
     container_name: superset
-    environment:
+    environment: &superset-env
       SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
       SUPERSET_LOAD_EXAMPLES: "no"
-      # (Optional - later) Use Postgres instead of SQLite:
       SQLALCHEMY_DATABASE_URI: postgresql+psycopg2://analytics:${ANALYTICS_DB_PASSWORD}@postgres:5432/superset
       ENABLE_PROXY_FIX: "true"
       SUPERSET_WEBSERVER_BASEURL: "https://superset.peakprecisiondata.com"
       SUPERSET_CONFIG_PATH: /app/pythonpath/config/superset_config.py
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      SUPERSET_ADMIN_EMAIL: ${SUPERSET_ADMIN_EMAIL}
     volumes:
       - ./superset_home:/app/superset_home
       - /opt/ppd/stacks/superset/config/superset_config.py:/app/pythonpath/config/superset_config.py:ro
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     networks:
       - core_data_net
-    # IMPORTANT: no custom 'command:' here for now
+
+  superset-worker:
+    image: superset-with-playwright:latest
+    container_name: superset-worker
+    command: ["/app/.venv/bin/celery", "--app=superset.tasks.celery_app:app", "worker", "--loglevel=info", "-c", "2"]
+    environment: *superset-env
+    volumes:
+      - ./superset_home:/app/superset_home
+      - /opt/ppd/stacks/superset/config/superset_config.py:/app/pythonpath/config/superset_config.py:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Override the image's built-in healthcheck (curl :8088) which only applies
+    # to the web server container — workers don't run on port 8088.
+    healthcheck:
+      test: ["CMD-SHELL", "/app/.venv/bin/celery -A superset.tasks.celery_app:app inspect ping --timeout 5 2>/dev/null | grep -q pong"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 60s
+    networks:
+      - core_data_net
+    restart: unless-stopped
+
+  superset-beat:
+    image: superset-with-playwright:latest
+    container_name: superset-beat
+    command: ["/app/.venv/bin/celery", "--app=superset.tasks.celery_app:app", "beat", "--loglevel=info", "-s", "/app/superset_home/celerybeat-schedule"]
+    environment: *superset-env
+    volumes:
+      - ./superset_home:/app/superset_home
+      - /opt/ppd/stacks/superset/config/superset_config.py:/app/pythonpath/config/superset_config.py:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Beat doesn't expose any port — just verify the scheduler process is alive.
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'celery.*beat' > /dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - core_data_net
+    restart: unless-stopped
 
   mlflow:
     image: ghcr.io/mlflow/mlflow:latest
@@ -90,6 +162,7 @@ services:
       --default-artifact-root /mlflow/artifacts
       --host 0.0.0.0
       --port 5000
+      --allowed-hosts "mlflow,mlflow:5000,localhost,localhost:5000,127.0.0.1,127.0.0.1:5000"
     volumes:
       - mlflow_data:/mlflow
     networks:
@@ -153,6 +226,7 @@ services:
       DB_NAME: analytics
       DB_USER: analytics
       DB_PASSWORD: ${ANALYTICS_DB_PASSWORD}
+      ANALYTICS_DB_URI: postgresql+psycopg2://analytics:${ANALYTICS_DB_PASSWORD}@postgres:5432/analytics
       DK_INBOX: /data/inbox
       DK_ARCHIVE: /data/archive
       DK_ERROR: /data/error

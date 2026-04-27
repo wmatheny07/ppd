@@ -1,3 +1,9 @@
+{{ config(
+    materialized='incremental',
+    unique_key=['record_date', 'person'],
+    tags=['health']
+)}}
+
 SELECT
   "date"::timestamp AS record_date,
   person,
@@ -17,3 +23,6 @@ FROM
   )
 WHERE
   metric_name = 'step_count'
+{%- if is_incremental() %}
+  AND "date"::timestamp > (SELECT MAX(record_date::timestamp) FROM {{ this }})
+  {% endif %}

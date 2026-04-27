@@ -1,3 +1,8 @@
+{{ config(
+    materialized='table',
+    tags=['health', 'staging']
+) }}
+
 SELECT
   workout ->> 'id' AS id,
   split_part(w._ab_source_file_url, '/', 3) AS person,

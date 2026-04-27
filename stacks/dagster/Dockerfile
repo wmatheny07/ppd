@@ -6,9 +6,15 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     postgresql-client \
     curl \
+    tesseract-ocr \
+    libgl1 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt/dagster/app
+
+ENV SHELL=/bin/bash
+RUN curl -fsSL https://public.cdn.getdbt.com/fs/install/install.sh | sh -s -- --update \
+    && ln -s /root/.local/bin/dbt /usr/local/bin/dbt
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

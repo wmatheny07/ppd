@@ -11,9 +11,11 @@ Required env vars:
 """
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import time
+from datetime import timedelta
 
 import resend
 
@@ -168,7 +170,8 @@ def promote_freshness_state(context):
 def dbt_source_freshness(context):
     logger = get_dagster_logger()
     logger.info("Checking dbt source freshness")
-    subprocess.run(
+
+    process = subprocess.Popen(
         f"""
         set -euo pipefail
         cd {DBT_PROJECT_DIR}
@@ -176,13 +179,61 @@ def dbt_source_freshness(context):
         dbt source freshness \
             --profiles-dir {DBT_PROFILES_DIR} \
             --target-path {DBT_ARTIFACTS_DIR}/target \
-            --log-path {DBT_ARTIFACTS_DIR}/logs
+            --log-path {DBT_ARTIFACTS_DIR}/logs \
+            --select "source:health source:raw_weather"
         """,
         shell=True,
-        check=True,
         executable="/bin/bash",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
         env=COMMON_ENV,
     )
+
+    for line in process.stdout:
+        logger.info(line.rstrip())
+
+    process.wait()
+
+    # Parse sources.json and emit a structured per-source freshness summary.
+    sources_path = f"{DBT_ARTIFACTS_DIR}/target/sources.json"
+    failed_sources = []
+    try:
+        with open(sources_path) as f:
+            sources = json.load(f)
+
+        for r in sources.get("results", []):
+            source_name = r["unique_id"].split(".")[-1]
+            status = r.get("status", "unknown")
+            max_loaded_at = r.get("max_loaded_at", "unknown")
+            age_s = r.get("max_loaded_at_time_ago_in_s")
+            criteria = r.get("criteria", {})
+            warn = criteria.get("warn_after") or {}
+            error_thresh = criteria.get("error_after") or {}
+
+            age_str = str(timedelta(seconds=int(age_s))) if age_s is not None else "unknown"
+            warn_str = f"{warn['count']} {warn['period']}(s)" if warn.get("count") else "none"
+            error_str = f"{error_thresh['count']} {error_thresh['period']}(s)" if error_thresh.get("count") else "none"
+
+            msg = (
+                f"[{status.upper()}] {source_name}: last loaded {age_str} ago "
+                f"(at {max_loaded_at}) — warn after {warn_str}, error after {error_str}"
+            )
+
+            if status == "error":
+                logger.error(msg)
+                failed_sources.append(source_name)
+            elif status == "warn":
+                logger.warning(msg)
+            else:
+                logger.info(msg)
+
+    except FileNotFoundError:
+        logger.warning(f"sources.json not found at {sources_path} — cannot report per-source freshness details")
+
+    if process.returncode != 0:
+        detail = f"Failed sources: {', '.join(failed_sources)}" if failed_sources else "check dbt logs above for details"
+        raise Exception(f"dbt source freshness check failed. {detail}")
 
 
 @op(ins={"start": In(Nothing)}, out=Out(Nothing))
@@ -200,7 +251,7 @@ def dbt_build_health_marts(context):
                 --profiles-dir {DBT_PROFILES_DIR} \
                 --target-path {DBT_ARTIFACTS_DIR}/target \
                 --log-path {DBT_ARTIFACTS_DIR}/logs \
-                --select "source_status:fresher+" \
+                --select "tag:health" \
                 --state {DBT_STATE_DIR}
         else
             echo "No state found — full build (bootstrap run)"

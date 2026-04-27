@@ -47,6 +47,14 @@ services:
       - DK_SCHEMA=${DK_SCHEMA:-nfl_dfs}
       # Email alerts
       - RESEND_API_KEY=${RESEND_API_KEY}
+      # Mail Intelligence
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_WES_USER}
+      - MINIO_SECRET_KEY=${MINIO_WES_PASSWORD}
+      - MINIO_MAIL_BUCKET=mail-raw
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - MAIL_HOUSEHOLD_NAMES=Wesley Matheny,Wes Matheny,Amanda Matheny
+      - MAIL_FATHER_NAMES=Kenneth Matheny,Kenny Matheny
     volumes:
       - ./dagster_home:/opt/dagster/dagster_home
       - ./project:/opt/dagster/app

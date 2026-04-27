@@ -176,7 +176,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_aq_obs_unique
 
 
 def get_pg_connection():
-    """Create a PostgreSQL connection."""
+    """Create a PostgreSQL connection (single attempt, no retry)."""
     return psycopg2.connect(
         host=POSTGRES_HOST,
         port=POSTGRES_PORT,
@@ -186,9 +186,25 @@ def get_pg_connection():
     )
 
 
+def connect_postgres(max_retries: int = 12, retry_delay: int = 10) -> psycopg2.extensions.connection:
+    """Connect to PostgreSQL with retry logic — mirrors create_consumer() for Kafka."""
+    for attempt in range(1, max_retries + 1):
+        try:
+            conn = get_pg_connection()
+            logger.info("Connected to PostgreSQL at %s:%s", POSTGRES_HOST, POSTGRES_PORT)
+            return conn
+        except psycopg2.OperationalError as exc:
+            logger.warning(
+                "PostgreSQL not available (attempt %d/%d), retrying in %ds...: %s",
+                attempt, max_retries, retry_delay, exc,
+            )
+            time.sleep(retry_delay)
+    raise RuntimeError(f"Failed to connect to PostgreSQL after {max_retries} attempts")
+
+
 def init_database():
     """Create schema and tables if they don't exist."""
-    conn = get_pg_connection()
+    conn = connect_postgres()
     try:
         with conn.cursor() as cur:
             cur.execute(DDL_WEATHER)
@@ -331,7 +347,7 @@ def main():
 
     # Create consumer
     consumer = create_consumer()
-    conn = get_pg_connection()
+    conn = connect_postgres()
 
     weather_batch: list[dict] = []
     aq_batch: list[dict] = []

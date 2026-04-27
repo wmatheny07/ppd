@@ -5,6 +5,7 @@
 
 SELECT
   {{ dbt_utils.generate_surrogate_key(['id','person','date']) }} AS id,
+  data_m.id as workout_id,
   person,
   data_source,
   qty,

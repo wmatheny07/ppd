@@ -73,7 +73,7 @@ FROM
           {{ ref('vw_workouts') }} vw
           LEFT JOIN {{ ref('fct_workout_time_adj') }} wta ON vw.id = wta.id
           AND wta.updated_end_date IS NOT NULL
-          LEFT JOIN {{ ref('fct_active_energy_summary') }} ves ON vw.id = ves.id
+          LEFT JOIN {{ ref('fct_active_energy_summary') }} ves ON vw.id = ves.workout_id
         WHERE
           {% if is_incremental() %}
           vw.start::timestamp > (SELECT MAX(workout_start::timestamp) FROM {{ this }})
