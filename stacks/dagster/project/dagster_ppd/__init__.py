@@ -3,7 +3,7 @@ from dagster_dbt import DbtCliResource
 
 from .assets.health_dbt import health_dbt_assets
 from .assets.weather_dbt import weather_dbt_assets
-from .assets.mail import raw_mail_documents, enriched_mail_documents, mail_dbt_assets, mail_scan_sensor
+from .assets.mail import raw_mail_documents, enriched_mail_documents, bank_statement_transactions, mail_dbt_assets, mail_scan_sensor
 from .jobs.espn_ingest import espn_ingest_job
 from .jobs.health_pipeline import health_pipeline_job
 from .jobs.mail_pipeline import mail_dbt_job, mail_pipeline_job
@@ -34,6 +34,7 @@ defs = Definitions(
         weather_dbt_assets,
         raw_mail_documents,
         enriched_mail_documents,
+        bank_statement_transactions,
         mail_dbt_assets,
     ],
     jobs=[

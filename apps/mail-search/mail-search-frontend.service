@@ -1,0 +1,15 @@
+[Unit]
+Description=Mail Intelligence Search Frontend
+After=network.target
+
+[Service]
+Type=simple
+User=wes
+WorkingDirectory=/opt/ppd/apps/mail-search/frontend
+ExecStartPre=/usr/bin/npm run build
+ExecStart=/opt/ppd/apps/mail-search/frontend/node_modules/.bin/vite preview
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

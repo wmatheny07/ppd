@@ -2,13 +2,14 @@ from dagster import define_asset_job
 
 from ..assets.mail.extraction import raw_mail_documents
 from ..assets.mail.enrichment import enriched_mail_documents
+from ..assets.mail.bank_transactions import bank_statement_transactions
 from ..assets.mail.mail_dbt import mail_dbt_assets
 
-# Triggered per-document by mail_scan_sensor. Runs extraction → enrichment for
-# a single MinIO key supplied via run config.
+# Triggered per-document by mail_scan_sensor. Runs extraction → enrichment →
+# transaction extraction (statements only) for a single MinIO key.
 mail_pipeline_job = define_asset_job(
     name="mail_pipeline_job",
-    selection=[raw_mail_documents, enriched_mail_documents],
+    selection=[raw_mail_documents, enriched_mail_documents, bank_statement_transactions],
     tags={"domain": "mail", "team": "mail_intelligence"},
 )
 

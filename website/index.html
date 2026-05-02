@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Peak Precision Data — Data Engineering & Analytics</title>
+  <meta name="description" content="Peak Precision Data engineers the pipelines, platforms, and intelligence systems that transform raw data into your most powerful competitive advantage." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- ── Nav ──────────────────────────────────────────────────────────────── -->
+  <nav id="nav">
+    <div class="nav-inner">
+      <a href="#" class="nav-logo">
+        <svg width="34" height="34" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="n-lg" x1="50%" y1="0%" x2="50%" y2="100%">
+              <stop offset="0%" stop-color="#5ba3f5"/><stop offset="100%" stop-color="#1a3d8a"/>
+            </linearGradient>
+            <linearGradient id="n-rg" x1="50%" y1="0%" x2="50%" y2="100%">
+              <stop offset="0%" stop-color="#4490d0"/><stop offset="100%" stop-color="#132e70"/>
+            </linearGradient>
+          </defs>
+          <polygon points="36,90 66,26 96,90" fill="url(#n-rg)"/>
+          <polygon points="4,90 38,10 72,90" fill="url(#n-lg)"/>
+          <polygon points="38,10 27,28 49,28" fill="white"/>
+          <polygon points="66,26 58,38 74,38" fill="white"/>
+          <polyline points="8,74 24,60 42,66 62,46 80,28 96,16" fill="none" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="8"  cy="74" r="4" fill="white"/>
+          <circle cx="24" cy="60" r="4" fill="white"/>
+          <circle cx="42" cy="66" r="4" fill="white"/>
+          <circle cx="62" cy="46" r="4" fill="white"/>
+          <circle cx="96" cy="16" r="7.5" fill="#3b82f6"/>
+          <circle cx="96" cy="16" r="4"   fill="#1e40af"/>
+        </svg>
+        <span class="nav-brand-name">Peak Precision Data</span>
+      </a>
+      <div class="nav-links">
+        <a href="#services">Services</a>
+        <a href="#why-ppd">Why PPD</a>
+        <a href="#stack">Stack</a>
+        <a href="mailto:wes@peakprecisiondata.com" class="nav-cta">Get in Touch</a>
+      </div>
+      <button class="nav-hamburger" id="nav-toggle" aria-label="Open menu">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+    <div class="nav-mobile" id="nav-mobile">
+      <a href="#services">Services</a>
+      <a href="#why-ppd">Why PPD</a>
+      <a href="#stack">Stack</a>
+      <a href="mailto:wes@peakprecisiondata.com">Get in Touch →</a>
+    </div>
+  </nav>
+
+  <!-- ── Hero ─────────────────────────────────────────────────────────────── -->
+  <section id="hero">
+    <div class="hero-bg">
+      <div class="hero-glow-l"></div>
+      <div class="hero-glow-r"></div>
+      <div class="hero-dots"></div>
+    </div>
+
+    <div class="container hero-layout">
+      <!-- Left: text -->
+      <div class="hero-text">
+        <div class="eyebrow">Data Engineering · Analytics · AI</div>
+        <h1>
+          Data is your edge.<br>
+          <span class="gradient-text">We help you sharpen it.</span>
+        </h1>
+        <p class="hero-sub">
+          Peak Precision Data architects the pipelines, platforms, and intelligence
+          systems that transform raw data into your most powerful competitive advantage.
+        </p>
+        <div class="hero-actions">
+          <a href="mailto:wes@peakprecisiondata.com" class="btn-primary">
+            Start a Conversation
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+            </svg>
+          </a>
+          <a href="#services" class="btn-ghost">See What We Build</a>
+        </div>
+      </div>
+
+      <!-- Right: hero visualization -->
+      <div class="hero-visual">
+        <div class="hero-visual-glow"></div>
+        <svg class="hero-svg" viewBox="0 0 460 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="h-lg" x1="50%" y1="0%" x2="50%" y2="100%">
+              <stop offset="0%" stop-color="#4a90e8"/><stop offset="100%" stop-color="#1a3d8a"/>
+            </linearGradient>
+            <linearGradient id="h-rg" x1="50%" y1="0%" x2="50%" y2="100%">
+              <stop offset="0%" stop-color="#3a7cc4"/><stop offset="100%" stop-color="#122c66"/>
+            </linearGradient>
+            <pattern id="h-dots" x="0" y="0" width="46" height="32" patternUnits="userSpaceOnUse">
+              <circle cx="23" cy="16" r="1.2" fill="#1e3358"/>
+            </pattern>
+          </defs>
+
+          <!-- dot grid -->
+          <rect width="460" height="320" fill="url(#h-dots)"/>
+
+          <!-- Right mountain (behind) -->
+          <polygon points="168,290 308,95 438,290" fill="url(#h-rg)" opacity="0.82"/>
+          <!-- Left mountain (front) -->
+          <polygon points="22,290 182,32 342,290" fill="url(#h-lg)"/>
+
+          <!-- Snow caps -->
+          <polygon points="182,32 159,72 205,72" fill="white" opacity="0.9"/>
+          <polygon points="308,95 290,122 326,122" fill="white" opacity="0.9"/>
+
+          <!-- Secondary faded line (depth) -->
+          <polyline points="22,252 100,205 182,224 272,168 354,118 428,84"
+            fill="none" stroke="#1e3358" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+          <!-- Animated primary data line -->
+          <polyline class="hero-line"
+            points="22,252 100,205 182,224 272,168 354,118 428,84"
+            fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+
+          <!-- Data nodes -->
+          <circle class="node n1" cx="22"  cy="252" r="5" fill="white"/>
+          <circle class="node n2" cx="100" cy="205" r="5" fill="white"/>
+          <circle class="node n3" cx="182" cy="224" r="5" fill="white"/>
+          <circle class="node n4" cx="272" cy="168" r="5" fill="white"/>
+          <circle class="node n5" cx="428" cy="84"  r="13" fill="#3b82f6"/>
+          <circle class="node n5" cx="428" cy="84"  r="6"  fill="#1e40af"/>
+
+          <!-- Callout 1 -->
+          <g class="callout c1">
+            <rect x="4" y="144" width="136" height="46" rx="8" fill="#0d1a35" stroke="#1e3358" stroke-width="1"/>
+            <text x="16" y="163" font-family="Inter, sans-serif" font-size="9" fill="#64748b" font-weight="600" letter-spacing="0.05em">PIPELINE UPTIME</text>
+            <text x="16" y="181" font-family="Inter, sans-serif" font-size="18" fill="#e2e8f0" font-weight="800">99.9%</text>
+            <circle cx="126" cy="167" r="5" fill="#10b981"/>
+          </g>
+
+          <!-- Callout 2 -->
+          <g class="callout c2">
+            <rect x="290" y="38" width="158" height="46" rx="8" fill="#0d1a35" stroke="#1e3358" stroke-width="1"/>
+            <text x="302" y="57" font-family="Inter, sans-serif" font-size="9" fill="#64748b" font-weight="600" letter-spacing="0.05em">QUERIES / DAY</text>
+            <text x="302" y="75" font-family="Inter, sans-serif" font-size="18" fill="#e2e8f0" font-weight="800">10M+</text>
+            <polyline points="432,55 436,49 440,55" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round"/>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <a href="#services" class="scroll-hint" aria-label="Scroll to services">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="6 9 12 15 18 9"/>
+      </svg>
+    </a>
+  </section>
+
+  <!-- ── Services ──────────────────────────────────────────────────────────── -->
+  <section id="services" class="section">
+    <div class="container">
+      <div class="section-header reveal">
+        <div class="eyebrow">What We Build</div>
+        <h2>Full-spectrum data capability,<br>built for your scale.</h2>
+        <p class="section-sub">From the first byte of raw data to the dashboard your team actually uses — we own the entire journey.</p>
+      </div>
+
+      <div class="services-grid">
+
+        <div class="service-card reveal">
+          <div class="service-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/>
+              <path d="M18 9a9 9 0 0 1-9 9"/>
+            </svg>
+          </div>
+          <h3>Data Engineering</h3>
+          <p>Reliable pipelines built for production. We design and implement ETL/ELT workflows, data lakes, and streaming architectures that move your data where it needs to go — on time, every time.</p>
+          <div class="service-tags">
+            <span>Airflow</span><span>dbt</span><span>Kafka</span><span>Python</span>
+          </div>
+        </div>
+
+        <div class="service-card reveal">
+          <div class="service-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+            </svg>
+          </div>
+          <h3>Analytics & Business Intelligence</h3>
+          <p>Dashboards that drive decisions. From data modeling in dbt to self-serve analytics in Superset and Metabase, we build the reporting layer that makes your data genuinely actionable.</p>
+          <div class="service-tags">
+            <span>Superset</span><span>Metabase</span><span>dbt</span><span>SQL</span>
+          </div>
+        </div>
+
+        <div class="service-card reveal">
+          <div class="service-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+            </svg>
+          </div>
+          <h3>Machine Learning & AI</h3>
+          <p>From experiment to production. We build ML infrastructure, experiment tracking, and LLM integration layers that take models from Jupyter notebooks to real, measurable business impact.</p>
+          <div class="service-tags">
+            <span>MLflow</span><span>Python</span><span>Claude API</span><span>Qdrant</span>
+          </div>
+        </div>
+
+        <div class="service-card reveal">
+          <div class="service-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <ellipse cx="12" cy="5" rx="9" ry="3"/>
+              <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+              <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+            </svg>
+          </div>
+          <h3>Data Platform Architecture</h3>
+          <p>Your entire data stack, designed to scale. We architect modern data platforms using open-source tools tailored to your workload — no vendor lock-in, no black boxes, no surprises.</p>
+          <div class="service-tags">
+            <span>PostgreSQL</span><span>MinIO</span><span>Docker</span><span>Dagster</span>
+          </div>
+        </div>
+
+        <div class="service-card reveal">
+          <div class="service-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+          </div>
+          <h3>Real-Time Streaming</h3>
+          <p>Act on data as it happens. We design Kafka-based streaming architectures and event-driven systems that power real-time dashboards, intelligent alerts, and automated workflows.</p>
+          <div class="service-tags">
+            <span>Kafka</span><span>Streaming</span><span>Event-Driven</span>
+          </div>
+        </div>
+
+        <div class="service-card reveal">
+          <div class="service-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+            </svg>
+          </div>
+          <h3>Full-Stack Data Applications</h3>
+          <p>Custom data products, built end-to-end. From FastAPI backends to React frontends, we engineer the software layer that puts your data in the hands of the people who need it most.</p>
+          <div class="service-tags">
+            <span>FastAPI</span><span>React</span><span>Django</span><span>REST</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Why PPD ────────────────────────────────────────────────────────────── -->
+  <section id="why-ppd" class="section section-alt">
+    <div class="container">
+      <div class="why-layout">
+        <div class="why-text reveal">
+          <div class="eyebrow">Why Peak Precision Data</div>
+          <h2>A partner that earns your trust by delivering results — not decks.</h2>
+          <p class="section-sub">We don't sell you a methodology. We learn your business, build what you actually need, and make sure your team can own it when we're done.</p>
+          <a href="mailto:wes@peakprecisiondata.com" class="btn-primary">
+            Work With Us
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+            </svg>
+          </a>
+        </div>
+        <div class="why-cards">
+          <div class="why-card reveal">
+            <div class="why-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+            </div>
+            <h4>Senior expertise on every engagement</h4>
+            <p>Your project never gets handed off to a junior team after the sales call. You get senior engineering from discovery to delivery, every time.</p>
+          </div>
+          <div class="why-card reveal">
+            <div class="why-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+                <polyline points="2 17 12 22 22 17"/>
+                <polyline points="2 12 12 17 22 12"/>
+              </svg>
+            </div>
+            <h4>End-to-end ownership</h4>
+            <p>Raw ingestion to polished dashboard to production ML model — we own the full data lifecycle so nothing falls through the cracks between teams.</p>
+          </div>
+          <div class="why-card reveal">
+            <div class="why-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 9.9-1"/>
+              </svg>
+            </div>
+            <h4>Open-source, no lock-in</h4>
+            <p>We build on tools you can own, audit, and extend. When the engagement ends, you own the stack — not a subscription to our proprietary platform.</p>
+          </div>
+          <div class="why-card reveal">
+            <div class="why-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+              </svg>
+            </div>
+            <h4>Outcomes over outputs</h4>
+            <p>We care whether your business makes better decisions — not just whether the pipeline runs green. Success is measured in business impact, full stop.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Tech Stack ─────────────────────────────────────────────────────────── -->
+  <section id="stack" class="section">
+    <div class="container">
+      <div class="section-header reveal">
+        <div class="eyebrow">Technology</div>
+        <h2>Modern stack. Battle-tested tools.</h2>
+        <p class="section-sub">We work across the full data ecosystem. If it moves, stores, transforms, or surfaces data — we've built with it in production.</p>
+      </div>
+      <div class="stack-grid reveal">
+        <div class="stack-col">
+          <h5>Orchestration</h5>
+          <div class="stack-tags">
+            <span>Apache Airflow</span><span>Dagster</span><span>dbt</span>
+          </div>
+        </div>
+        <div class="stack-col">
+          <h5>Storage & Databases</h5>
+          <div class="stack-tags">
+            <span>PostgreSQL</span><span>MinIO</span><span>Qdrant</span><span>Redis</span>
+          </div>
+        </div>
+        <div class="stack-col">
+          <h5>Streaming</h5>
+          <div class="stack-tags">
+            <span>Apache Kafka</span><span>KRaft</span><span>Event-Driven</span>
+          </div>
+        </div>
+        <div class="stack-col">
+          <h5>Analytics & BI</h5>
+          <div class="stack-tags">
+            <span>Apache Superset</span><span>Metabase</span><span>SQL</span>
+          </div>
+        </div>
+        <div class="stack-col">
+          <h5>ML & AI</h5>
+          <div class="stack-tags">
+            <span>MLflow</span><span>Python</span><span>Anthropic Claude</span><span>OpenAI</span>
+          </div>
+        </div>
+        <div class="stack-col">
+          <h5>Application</h5>
+          <div class="stack-tags">
+            <span>FastAPI</span><span>Django</span><span>React</span><span>Flask</span>
+          </div>
+        </div>
+        <div class="stack-col">
+          <h5>Infrastructure</h5>
+          <div class="stack-tags">
+            <span>Docker</span><span>Linux</span><span>Nginx</span><span>systemd</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Contact CTA ────────────────────────────────────────────────────────── -->
+  <section id="contact" class="section section-cta">
+    <div class="container">
+      <div class="cta-inner reveal">
+        <div class="cta-glow"></div>
+        <svg width="56" height="56" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="c-lg" x1="50%" y1="0%" x2="50%" y2="100%">
+              <stop offset="0%" stop-color="#5ba3f5"/><stop offset="100%" stop-color="#1a3d8a"/>
+            </linearGradient>
+            <linearGradient id="c-rg" x1="50%" y1="0%" x2="50%" y2="100%">
+              <stop offset="0%" stop-color="#4490d0"/><stop offset="100%" stop-color="#132e70"/>
+            </linearGradient>
+          </defs>
+          <polygon points="36,90 66,26 96,90" fill="url(#c-rg)"/>
+          <polygon points="4,90 38,10 72,90" fill="url(#c-lg)"/>
+          <polygon points="38,10 27,28 49,28" fill="white"/>
+          <polygon points="66,26 58,38 74,38" fill="white"/>
+          <polyline points="8,74 24,60 42,66 62,46 80,28 96,16" fill="none" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="8"  cy="74" r="4" fill="white"/>
+          <circle cx="24" cy="60" r="4" fill="white"/>
+          <circle cx="42" cy="66" r="4" fill="white"/>
+          <circle cx="62" cy="46" r="4" fill="white"/>
+          <circle cx="96" cy="16" r="7.5" fill="#3b82f6"/>
+          <circle cx="96" cy="16" r="4"   fill="#1e40af"/>
+        </svg>
+        <h2>Ready to build something that matters?</h2>
+        <p>Tell us about your data challenges. We'll tell you exactly how we'd solve them.</p>
+        <a href="mailto:wes@peakprecisiondata.com" class="btn-primary btn-large">
+          wes@peakprecisiondata.com
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+            <polyline points="22,6 12,13 2,6"/>
+          </svg>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Footer ────────────────────────────────────────────────────────────── -->
+  <footer>
+    <div class="container footer-inner">
+      <div class="footer-brand">
+        <svg width="22" height="22" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="f-lg" x1="50%" y1="0%" x2="50%" y2="100%">
+              <stop offset="0%" stop-color="#5ba3f5"/><stop offset="100%" stop-color="#1a3d8a"/>
+            </linearGradient>
+            <linearGradient id="f-rg" x1="50%" y1="0%" x2="50%" y2="100%">
+              <stop offset="0%" stop-color="#4490d0"/><stop offset="100%" stop-color="#132e70"/>
+            </linearGradient>
+          </defs>
+          <polygon points="36,90 66,26 96,90" fill="url(#f-rg)"/>
+          <polygon points="4,90 38,10 72,90" fill="url(#f-lg)"/>
+          <polygon points="38,10 27,28 49,28" fill="white"/>
+          <polygon points="66,26 58,38 74,38" fill="white"/>
+          <polyline points="8,74 24,60 42,66 62,46 80,28 96,16" fill="none" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="8"  cy="74" r="4" fill="white"/>
+          <circle cx="24" cy="60" r="4" fill="white"/>
+          <circle cx="42" cy="66" r="4" fill="white"/>
+          <circle cx="62" cy="46" r="4" fill="white"/>
+          <circle cx="96" cy="16" r="7.5" fill="#3b82f6"/>
+          <circle cx="96" cy="16" r="4"   fill="#1e40af"/>
+        </svg>
+        <span>Peak Precision Data</span>
+      </div>
+      <nav class="footer-links">
+        <a href="#services">Services</a>
+        <a href="#why-ppd">Why PPD</a>
+        <a href="#stack">Stack</a>
+        <a href="mailto:wes@peakprecisiondata.com">Contact</a>
+      </nav>
+      <p class="footer-copy">© 2025 Peak Precision Data. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <script src="main.js"></script>
+</body>
+</html>
