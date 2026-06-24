@@ -1,4 +1,9 @@
-{{ config(materialized='incremental', unique_key=['id', 'person']) }}
+{{ config(
+  materialized='incremental', 
+  unique_key=['id', 'person'],
+  incremental_strategy='delete+insert'
+  )
+}}
 
 WITH
   hrv_raw AS (
@@ -14,7 +19,8 @@ WITH
     FROM {{ ref('vw_hr_variability_metrics') }}
     WHERE heart_rate_variability BETWEEN 1 AND 300
     {% if is_incremental() %}
-    AND record_date::date > (SELECT MAX(record_date) FROM {{ this }})
+    AND (record_date::date > (SELECT MAX(record_date) FROM {{ this }})
+    or record_date::date > current_date - interval '30 day') -- reprocess last 30 days to capture updates
     {% endif %}
   ),
 

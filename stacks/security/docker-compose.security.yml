@@ -1,0 +1,85 @@
+services:
+
+  # ---------------------------------------------------------------------------
+  # Security Scanner
+  # Python service with Trivy + Syft + LangGraph/Claude.
+  # Exposes a FastAPI endpoint for Dagster to trigger scans and check status.
+  # Also runs its own APScheduler for autonomous daily/weekly operation.
+  # ---------------------------------------------------------------------------
+  security-scanner:
+    build:
+      context: ./scanner
+      dockerfile: Dockerfile
+    image: ppd-security-scanner:latest
+    container_name: security-scanner
+    hostname: security-scanner
+    environment:
+      # Analytics DB (security schema lives here)
+      - ANALYTICS_DB_HOST=postgres
+      - ANALYTICS_DB_PORT=5432
+      - ANALYTICS_DB_NAME=${ANALYTICS_DB_NAME}
+      - ANALYTICS_DB_USER=${ANALYTICS_DB_USER}
+      - ANALYTICS_DB_PASSWORD=${ANALYTICS_DB_PASSWORD}
+      # MinIO (raw SBOM + scan artifact storage)
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_WES_USER}
+      - MINIO_SECRET_KEY=${MINIO_WES_PASSWORD}
+      - MINIO_SECURITY_BUCKET=security-scans
+      # Claude / Anthropic
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      # NVD API key — optional, increases rate limit from 5 to 50 req/30s
+      - NVD_API_KEY=${NVD_API_KEY:-}
+      # GitHub token — optional, needed for private repos and higher rate limits
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      # Email reporting (Resend)
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - SECURITY_REPORT_EMAIL=${SECURITY_REPORT_EMAIL:-wmatheny07@gmail.com}
+      - SECURITY_REPORT_FROM=${SECURITY_REPORT_FROM:-security@peakprecisiondata.com}
+      # Scan schedules (cron format, America/New_York)
+      - SCAN_SCHEDULE_CRON=0 2 * * *      # daily full scan at 2am
+      - VERSION_CHECK_SCHEDULE_CRON=0 3 * * 1  # version drift Mondays at 3am
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./scanner/src:/app/src:ro
+      # Read-only Docker socket — Trivy/Syft need it to pull image layers
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # CVE suppression list — mounted read-only so it can be updated without rebuilding
+      - ./scanner/trivyignore:/app/trivyignore:ro
+    ports:
+      - "18100:8000"
+    networks:
+      - core_data_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # Security Portal Frontend
+  # React SPA (Vite) served by nginx inside the container.
+  # External nginx proxies security.peakprecisiondata.com → this container.
+  # /api/* is routed by external nginx to security-scanner, not this container.
+  # ---------------------------------------------------------------------------
+  security-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: ppd-security-frontend:latest
+    container_name: security-frontend
+    hostname: security-frontend
+    networks:
+      - core_data_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:80/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+networks:
+  core_data_net:
+    external: true

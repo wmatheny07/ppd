@@ -11,6 +11,7 @@ volumes:
   metabase_data:
   mlflow_data:
   qdrant_data:
+  jupyter_settings:
 
 services:
   redis:
@@ -99,6 +100,7 @@ services:
       SUPERSET_CONFIG_PATH: /app/pythonpath/config/superset_config.py
       RESEND_API_KEY: ${RESEND_API_KEY}
       SUPERSET_ADMIN_EMAIL: ${SUPERSET_ADMIN_EMAIL}
+      TZ: America/New_York
     volumes:
       - ./superset_home:/app/superset_home
       - /opt/ppd/stacks/superset/config/superset_config.py:/app/pythonpath/config/superset_config.py:ro
@@ -197,6 +199,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
     volumes:
       - ./notebooks:/workspace
+      - jupyter_settings:/root/.jupyter/lab/user-settings
     working_dir: /workspace
     ports:
       - "8889:8888"
@@ -213,6 +216,8 @@ services:
       --ServerApp.open_browser=False
       --ServerApp.token=''
       --ServerApp.trust_xheaders=True
+      --ServerApp.websocket_ping_interval=25000
+      --ServerApp.websocket_ping_timeout=10000
       --allow-root"
   
   dk-ingest:

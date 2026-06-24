@@ -55,6 +55,8 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - MAIL_HOUSEHOLD_NAMES=Wesley Matheny,Wes Matheny,Amanda Matheny
       - MAIL_FATHER_NAMES=Kenneth Matheny,Kenny Matheny
+      # Security scanner
+      - SECURITY_SCANNER_URL=http://security-scanner:8000
     volumes:
       - ./dagster_home:/opt/dagster/dagster_home
       - ./project:/opt/dagster/app

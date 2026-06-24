@@ -1,4 +1,9 @@
-{{ config(materialized='incremental', unique_key=['id', 'person']) }}
+{{ config(
+    materialized='incremental', 
+    unique_key=['id', 'person'],
+    incremental_strategy='delete+insert'
+)
+}}
 
 select
     md5(concat(record_date, person, resting_heart_rate)) as id,
@@ -10,4 +15,5 @@ select
         {%- if is_incremental() %}
         where
         record_date::date > (SELECT MAX(record_date::date) FROM {{ this }})
-        {% endif %}
+        or record_date::date > current_date - interval '30 day' -- reprocess last 30 days to capture updates
+         {%- endif %}

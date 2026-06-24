@@ -1,0 +1,11 @@
+# CVE-2019-1010022 — libc-bin / libc6 (glibc stack guard bypass)
+# Disputed by glibc maintainers; classified as a non-issue because the
+# attack requires write access to the stack, which implies prior exploitation.
+# No upstream fix exists and none is planned. Suppress to reduce noise.
+CVE-2019-1010022
+
+# CVE-2016-1585 — apparmor (profile bypass)
+# No upstream fix available. Risk accepted: Chromium does not run as root
+# inside the superset-with-playwright container, and the container exposes no
+# inbound network listener beyond the Superset gunicorn port.
+CVE-2016-1585

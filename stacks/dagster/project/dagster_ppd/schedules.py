@@ -8,6 +8,10 @@ Schedule mapping from Airflow:
 
 Kafka-sourced:
   weather_pipeline        → weather_pipeline_schedule "*/30 * * * *" (every 30 min, 24/7)
+
+Security:
+  security_image_scan     → security_scan_schedule       "0 2 * * *"   (daily 2am ET)
+  security_version_check  → security_version_check_schedule "0 3 * * 1" (Mondays 3am ET)
 """
 from __future__ import annotations
 
@@ -17,6 +21,7 @@ from .jobs.espn_ingest import espn_ingest_job
 from .jobs.health_pipeline import health_pipeline_job
 from .jobs.mail_pipeline import mail_dbt_job
 from .jobs.nfl_dfs_ingest import nfl_dfs_ingest_job
+from .jobs.security_scan import security_image_scan_job, security_version_check_job
 from .jobs.weather_pipeline import weather_pipeline_job
 
 espn_ingest_schedule = ScheduleDefinition(
@@ -51,5 +56,19 @@ mail_dbt_schedule = ScheduleDefinition(
     name="mail_dbt_schedule",
     job=mail_dbt_job,
     cron_schedule="*/30 * * * *",   # Every 30 minutes — builds after sensor-driven runs
+    execution_timezone="America/New_York",
+)
+
+security_scan_schedule = ScheduleDefinition(
+    name="security_scan_schedule",
+    job=security_image_scan_job,
+    cron_schedule="0 2 * * *",      # Daily at 2am
+    execution_timezone="America/New_York",
+)
+
+security_version_check_schedule = ScheduleDefinition(
+    name="security_version_check_schedule",
+    job=security_version_check_job,
+    cron_schedule="0 3 * * 1",      # Mondays at 3am
     execution_timezone="America/New_York",
 )

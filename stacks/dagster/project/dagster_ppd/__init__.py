@@ -8,6 +8,7 @@ from .jobs.espn_ingest import espn_ingest_job
 from .jobs.health_pipeline import health_pipeline_job
 from .jobs.mail_pipeline import mail_dbt_job, mail_pipeline_job
 from .jobs.nfl_dfs_ingest import nfl_dfs_ingest_job
+from .jobs.security_scan import security_image_scan_job, security_version_check_job
 from .jobs.weather_pipeline import weather_pipeline_job
 from .resources import AnthropicResource, MinIOResource, PostgresResource
 from .schedules import (
@@ -15,6 +16,8 @@ from .schedules import (
     health_pipeline_schedule,
     mail_dbt_schedule,
     nfl_dfs_ingest_schedule,
+    security_scan_schedule,
+    security_version_check_schedule,
     weather_pipeline_schedule,
 )
 
@@ -43,6 +46,8 @@ defs = Definitions(
         mail_pipeline_job,
         mail_dbt_job,
         nfl_dfs_ingest_job,
+        security_image_scan_job,
+        security_version_check_job,
         weather_pipeline_job,
     ],
     schedules=[
@@ -50,6 +55,8 @@ defs = Definitions(
         health_pipeline_schedule,
         mail_dbt_schedule,
         nfl_dfs_ingest_schedule,
+        security_scan_schedule,
+        security_version_check_schedule,
         weather_pipeline_schedule,
     ],
     sensors=[

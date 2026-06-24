@@ -276,6 +276,7 @@ img, svg { display: block; }
   width: 100%;
   max-width: 530px;
   height: auto;
+  overflow: visible;
   filter: drop-shadow(0 0 48px rgba(59,130,246,0.14));
 }
 

@@ -1,0 +1,30 @@
+# API framework + scheduling
+fastapi
+uvicorn[standard]
+apscheduler
+
+# AI agent framework
+anthropic
+langgraph
+langchain-anthropic
+
+# Docker API (image/container inventory)
+docker
+
+# Database
+psycopg2-binary
+
+# Object storage
+boto3
+
+# HTTP
+httpx
+requests
+
+# Data / utilities
+pydantic>=2.0
+python-dateutil
+
+# Email + PDF reporting
+resend
+fpdf2

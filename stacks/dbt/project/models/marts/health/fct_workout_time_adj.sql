@@ -1,4 +1,9 @@
-{{ config(materialized='incremental', unique_key=['id', 'person']) }}
+{{ config(
+    materialized='incremental', 
+    unique_key=['id', 'person'],
+    incremental_strategy='delete+insert'
+    )
+}}
 
 WITH
   diff_check AS (
@@ -33,6 +38,7 @@ FROM
   LEFT JOIN diff_check ON vae.id = diff_check.id
 {% if is_incremental() %}
 WHERE vae.date::timestamp > (SELECT MAX(end_date::timestamp) FROM {{ this }})
+OR vae.date::date > current_date - interval '30 day' -- reprocess last 30 days to capture updates
 {% endif %}
 GROUP BY
   vae.id,

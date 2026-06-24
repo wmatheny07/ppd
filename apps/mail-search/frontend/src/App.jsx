@@ -9,59 +9,56 @@ function PPDLogo({ size = 36 }) {
     <svg width={size} height={size} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <linearGradient id="ppd-lg" x1="50%" y1="0%" x2="50%" y2="100%">
-          <stop offset="0%" stopColor="#5ba3f5" />
-          <stop offset="100%" stopColor="#1a3d8a" />
+          <stop offset="0%" stopColor="#5ba3f5"/><stop offset="100%" stopColor="#1a3d8a"/>
         </linearGradient>
         <linearGradient id="ppd-rg" x1="50%" y1="0%" x2="50%" y2="100%">
-          <stop offset="0%" stopColor="#4490d0" />
-          <stop offset="100%" stopColor="#132e70" />
+          <stop offset="0%" stopColor="#4490d0"/><stop offset="100%" stopColor="#132e70"/>
         </linearGradient>
       </defs>
-      {/* Right mountain */}
-      <polygon points="36,90 66,26 96,90" fill="url(#ppd-rg)" />
-      {/* Left mountain */}
-      <polygon points="4,90 38,10 72,90" fill="url(#ppd-lg)" />
-      {/* Snow caps */}
-      <polygon points="38,10 27,28 49,28" fill="white" />
-      <polygon points="66,26 58,38 74,38" fill="white" />
-      {/* Data line */}
-      <polyline
-        points="8,74 24,60 42,66 62,46 80,28 96,16"
-        fill="none"
-        stroke="white"
-        strokeWidth="3.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      {/* Data nodes */}
-      <circle cx="8"  cy="74" r="4" fill="white" />
-      <circle cx="24" cy="60" r="4" fill="white" />
-      <circle cx="42" cy="66" r="4" fill="white" />
-      <circle cx="62" cy="46" r="4" fill="white" />
-      {/* Accent dot */}
-      <circle cx="96" cy="16" r="7.5" fill="#3b82f6" />
-      <circle cx="96" cy="16" r="4"   fill="#1e40af" />
+      <polygon points="36,90 66,26 96,90" fill="url(#ppd-rg)"/>
+      <polygon points="4,90 38,10 72,90" fill="url(#ppd-lg)"/>
+      <polygon points="38,10 27,28 49,28" fill="white"/>
+      <polygon points="66,26 58,38 74,38" fill="white"/>
+      <polyline points="8,74 24,60 42,66 62,46 80,28 96,16" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/>
+      <circle cx="8"  cy="74" r="4" fill="white"/>
+      <circle cx="24" cy="60" r="4" fill="white"/>
+      <circle cx="42" cy="66" r="4" fill="white"/>
+      <circle cx="62" cy="46" r="4" fill="white"/>
+      <circle cx="96" cy="16" r="7.5" fill="#3b82f6"/>
+      <circle cx="96" cy="16" r="4"   fill="#1e40af"/>
     </svg>
   )
 }
 
 // ── Saved searches ───────────────────────────────────────────────────────────
 
-const SAVED_KEY = 'ppd-mail-saved-searches'
-
 function useSavedSearches() {
-  const [saved, setSaved] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(SAVED_KEY) ?? '[]') }
-    catch { return [] }
-  })
+  const [saved, setSaved] = useState([])
 
-  const persist = (next) => {
-    localStorage.setItem(SAVED_KEY, JSON.stringify(next))
-    setSaved(next)
+  useEffect(() => {
+    fetch('/api/saved-searches')
+      .then(r => r.ok ? r.json() : { searches: [] })
+      .then(d => setSaved(d.searches ?? []))
+      .catch(() => {})
+  }, [])
+
+  const save = async (q) => {
+    if (saved.some(s => s.query === q)) return
+    const res = await fetch('/api/saved-searches', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: q }),
+    })
+    if (res.ok) {
+      const entry = await res.json()
+      setSaved(prev => [entry, ...prev])
+    }
   }
 
-  const save   = (q) => persist(saved.includes(q) ? saved : [q, ...saved].slice(0, 30))
-  const remove = (q) => persist(saved.filter(s => s !== q))
+  const remove = async (id) => {
+    await fetch(`/api/saved-searches/${id}`, { method: 'DELETE' })
+    setSaved(prev => prev.filter(s => s.id !== id))
+  }
 
   return { saved, save, remove }
 }
@@ -540,8 +537,11 @@ export default function App() {
           onSearch={handleSearch}
           loading={loading}
           lastQuery={lastQuery}
-          isSaved={lastQuery != null && savedSearches.includes(lastQuery)}
-          onToggleSave={() => savedSearches.includes(lastQuery) ? removeSearch(lastQuery) : saveSearch(lastQuery)}
+          isSaved={lastQuery != null && savedSearches.some(s => s.query === lastQuery)}
+          onToggleSave={() => {
+            const entry = savedSearches.find(s => s.query === lastQuery)
+            entry ? removeSearch(entry.id) : saveSearch(lastQuery)
+          }}
         />
 
         {error && (
@@ -569,10 +569,10 @@ export default function App() {
               {savedSearches.length > 0 && (
                 <div className="saved-searches">
                   <p className="saved-label">Saved searches</p>
-                  {savedSearches.map(q => (
-                    <div key={q} className="saved-row">
-                      <button className="saved-chip" onClick={() => handleSearch(q)}>{q}</button>
-                      <button className="saved-remove" onClick={() => removeSearch(q)} title="Remove">×</button>
+                  {savedSearches.map(s => (
+                    <div key={s.id} className="saved-row">
+                      <button className="saved-chip" onClick={() => handleSearch(s.query)}>{s.query}</button>
+                      <button className="saved-remove" onClick={() => removeSearch(s.id)} title="Remove">×</button>
                     </div>
                   ))}
                 </div>

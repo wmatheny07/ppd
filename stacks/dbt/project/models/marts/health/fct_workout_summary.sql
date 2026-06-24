@@ -1,4 +1,9 @@
-{{ config(materialized='incremental', unique_key=['person','workout_type','workout_start','workout_end']) }}
+{{ config(
+  materialized='incremental', 
+  unique_key=['person','workout_type','workout_start','workout_end'],
+  incremental_strategy='delete+insert',
+  tags=['health']
+) }}
 
 SELECT
   id,
@@ -76,7 +81,8 @@ FROM
           LEFT JOIN {{ ref('fct_active_energy_summary') }} ves ON vw.id = ves.workout_id
         WHERE
           {% if is_incremental() %}
-          vw.start::timestamp > (SELECT MAX(workout_start::timestamp) FROM {{ this }})
+          (vw.start::timestamp > (SELECT MAX(workout_start::timestamp) FROM {{ this }})
+          OR vw.start::date > current_date - interval '30 day')-- reprocess last 30 days to capture updates
           {% else %}
           1 = 1
           {% endif %}

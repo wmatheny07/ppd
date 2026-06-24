@@ -18,12 +18,15 @@ if "MINIO_SECRET_KEY" not in os.environ and "MINIO_WES_PASSWORD" in os.environ:
 os.environ["AWS_SHARED_CREDENTIALS_FILE"] = "/dev/null"
 os.environ["AWS_CONFIG_FILE"] = "/dev/null"
 
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from db import fetch_one
-from db import get_connection
+from db import (
+    fetch_one, get_connection,
+    ensure_saved_searches_table,
+    get_saved_searches, create_saved_search, delete_saved_search,
+)
 from pdf_proxy import get_pdf_response
 from search import search as do_search
 from upload import upload_scan
@@ -38,9 +41,23 @@ app.add_middleware(
         "http://localhost:5175",
         "https://mail.peakprecisiondata.com",
     ],
-    allow_methods=["GET", "POST", "PATCH"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE"],
     allow_headers=["Content-Type"],
 )
+
+
+@app.on_event("startup")
+def startup():
+    ensure_saved_searches_table()
+
+
+def _user_email(request: Request) -> str:
+    """Extract the Cloudflare Access user identity from the injected header.
+    Falls back to DEV_USER_EMAIL env var so local dev still works."""
+    email = request.headers.get("CF-Access-Authenticated-User-Email", "").strip()
+    if not email:
+        email = os.environ.get("DEV_USER_EMAIL", "dev@localhost")
+    return email
 
 
 class SearchRequest(BaseModel):
@@ -92,6 +109,30 @@ def get_pdf(document_id: int):
 async def upload(file: UploadFile = File(...)):
     key = await upload_scan(file)
     return {"ok": True, "minio_key": key}
+
+
+@app.get("/api/saved-searches")
+def list_saved_searches(request: Request):
+    return {"searches": get_saved_searches(_user_email(request))}
+
+
+class SaveSearchRequest(BaseModel):
+    query: str
+
+
+@app.post("/api/saved-searches")
+def add_saved_search(request: Request, body: SaveSearchRequest):
+    q = body.query.strip()
+    if not q:
+        raise HTTPException(status_code=422, detail="query must not be empty")
+    return create_saved_search(_user_email(request), q)
+
+
+@app.delete("/api/saved-searches/{search_id}")
+def remove_saved_search(request: Request, search_id: int):
+    if not delete_saved_search(_user_email(request), search_id):
+        raise HTTPException(status_code=404, detail="Saved search not found")
+    return {"ok": True}
 
 
 @app.get("/healthz")

@@ -1,4 +1,9 @@
-{{ config(materialized='incremental', unique_key=['id', 'person', 'data_source']) }}
+{{ config(
+    materialized='incremental', 
+    unique_key=['id', 'person', 'data_source'],
+    incremental_strategy='delete+insert'
+)
+}}
 
 SELECT
   id,
@@ -12,6 +17,7 @@ FROM
   {{ ref('vw_active_energy') }}
 {% if is_incremental() %}
 WHERE date::timestamp > (SELECT MAX(end_time::timestamp) FROM {{ this }})
+or date::date > current_date - interval '30 day' -- reprocess last 30 days to capture updates
 {% endif %}
 GROUP BY
   id,

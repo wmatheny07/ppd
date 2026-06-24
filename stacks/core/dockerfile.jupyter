@@ -2,7 +2,11 @@ FROM pytorch/pytorch:2.3.1-cuda11.8-cudnn8-runtime
 
 RUN pip install --no-cache-dir \
   jupyterlab mlflow qdrant-client transformers sentence-transformers \
-  scikit-learn xgboost tensorflow boto3 duckdb
+  scikit-learn xgboost tensorflow boto3 duckdb plotly seaborn
+
+RUN mkdir -p /root/.jupyter/lab/user-settings/@jupyterlab/apputils-extension && \
+    echo '{"theme":"JupyterLab Dark"}' \
+    > /root/.jupyter/lab/user-settings/@jupyterlab/apputils-extension/themes.jupyterlab-settings
 
 WORKDIR /workspace
 EXPOSE 8888

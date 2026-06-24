@@ -1,6 +1,7 @@
 {{- config(
     materialized='incremental',
     unique_key=['record_date', 'person'],
+    incremental_strategy='delete+insert',
     tags=['health']
 ) -}}
 
@@ -16,5 +17,6 @@ FROM
     and hr.person = hrv.person
 WHERE overnight_avg_hrv is not null
 {% if is_incremental() %}
-  AND hr.record_date::date > (SELECT MAX(record_date::date) FROM {{ this }})
+  AND (hr.record_date::date > (SELECT MAX(record_date::date) FROM {{ this }})
+  or hr.record_date::date > current_date - interval '30 day') -- reprocess last 30 days to capture updates
 {% endif %}

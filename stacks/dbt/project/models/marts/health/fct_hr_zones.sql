@@ -1,4 +1,9 @@
-{{ config(materialized='incremental', unique_key=['record_date', 'person', 'workout_type', 'hr_zone']) }}
+{{ config(
+    materialized='incremental', 
+    unique_key=['record_date', 'person', 'workout_type', 'hr_zone'],
+    incremental_strategy='delete+insert'
+    )
+}}
 
 WITH
   constants AS (
@@ -23,6 +28,7 @@ WITH
       CROSS JOIN constants
     {% if is_incremental() %}
     WHERE vhrd."date"::date > (SELECT MAX(record_date::date) FROM {{ this }})
+    or vhrd."date"::date > current_date - interval '30 day' -- reprocess last 30 days to capture updates
     {% endif %}
   ),
   zones AS (

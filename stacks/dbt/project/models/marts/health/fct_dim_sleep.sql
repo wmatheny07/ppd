@@ -14,6 +14,7 @@ WHERE
   total_sleep > 0
   {%- if is_incremental() %}
   AND record_date::date > (SELECT MAX(record_date::date) FROM {{ this }})
+  or record_date::date > current_date - interval '30 day' -- reprocess last 30 days to capture updates
   {% endif %}
 {% if not loop.last %}
 UNION ALL
