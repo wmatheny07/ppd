@@ -2,27 +2,31 @@
     materialized='incremental',
     unique_key=['record_date', 'person'],
     tags=['health']
-)}}
+) }}
+
+WITH raw_metrics AS (
+
+    SELECT DISTINCT
+        JSONB_ARRAY_ELEMENTS(JSONB_ARRAY_ELEMENTS(data -> 'metrics') -> 'data') ->> 'date' AS "date"
+        , SPLIT_PART(_ab_source_file_url, '/', 3) AS person
+        , JSONB_ARRAY_ELEMENTS(JSONB_ARRAY_ELEMENTS(data -> 'metrics') -> 'data') ->> 'qty' AS qty
+        , JSONB_ARRAY_ELEMENTS(JSONB_ARRAY_ELEMENTS(data -> 'metrics') -> 'data') ->> 'source' AS data_source
+        , JSONB_ARRAY_ELEMENTS(data -> 'metrics') ->> 'name' AS metric_name
+    FROM
+        {{ source('health', 'metrics') }}
+
+)
 
 SELECT
-  "date"::timestamp AS record_date,
-  person,
-  qty::float AS step_count,
-  data_source,
-  metric_name
+    "date"::TIMESTAMP AS record_date
+    , person
+    , qty::FLOAT AS step_count
+    , data_source
+    , metric_name
 FROM
-  (
-    SELECT DISTINCT
-      JSONB_ARRAY_ELEMENTS(JSONB_ARRAY_ELEMENTS(data -> 'metrics') -> 'data') ->> 'date' "date",
-      split_part(_ab_source_file_url, '/', 3) person,
-      JSONB_ARRAY_ELEMENTS(JSONB_ARRAY_ELEMENTS(data -> 'metrics') -> 'data') ->> 'qty' qty,
-      JSONB_ARRAY_ELEMENTS(JSONB_ARRAY_ELEMENTS(data -> 'metrics') -> 'data') ->> 'source' data_source,
-      JSONB_ARRAY_ELEMENTS(data -> 'metrics') ->> 'name' metric_name
-    FROM
-      {{ source('health', 'metrics') }}
-  )
+    raw_metrics
 WHERE
-  metric_name = 'step_count'
-{%- if is_incremental() %}
-  AND "date"::timestamp > (SELECT MAX(record_date::timestamp) FROM {{ this }})
-  {% endif %}
+    metric_name = 'step_count'
+    {%- if is_incremental() %}
+        AND "date"::TIMESTAMP > (SELECT MAX(record_date::TIMESTAMP) FROM {{ this }})
+    {% endif %}

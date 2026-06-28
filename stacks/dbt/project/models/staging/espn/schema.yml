@@ -18,8 +18,9 @@ models:
         tests:
           - not_null
           - relationships:
-              to: ref('stg_espn_play')
-              field: play_pk
+              arguments:
+                to: ref('stg_espn_play')
+                field: play_pk
       - name: athlete_espn_id
         tests: [not_null]
 
@@ -31,13 +32,16 @@ models:
         tests:
           - not_null
           - relationships:
-              to: ref('stg_espn_play')
-              field: play_pk
+              arguments:
+                to: ref('stg_espn_play')
+                field: play_pk
       - name: team_espn_id
         tests: [not_null]
       - name: team_type
         tests:
           - accepted_values:
-              values: ["offense", "defense"]
-              quote: true
-              severity: warn
+              arguments:
+                values: ["offense", "defense"]
+                quote: true
+              config:
+                severity: warn

@@ -1,48 +1,46 @@
 {{ config(
-    materialized='incremental', 
+    materialized='incremental',
     unique_key=['id', 'person'],
     incremental_strategy='delete+insert'
-    )
-}}
+) }}
 
-WITH
-  diff_check AS (
+WITH diff_check AS (
+
     SELECT
-      ves.id,
-      ves.person,
-      date
-    FROM
-      (
+        ves.id
+        , ves.person
+        , date
+    FROM (
         SELECT
-          id,
-          person,
-          MAX(perc_diff_prev) perc_diff
-        FROM
-          {{ ref('vw_active_energy') }}
-        GROUP BY
-          id, person
-      ) diffs
-      JOIN {{ ref('vw_active_energy') }} ves ON diffs.id = ves.id
-      AND diffs.perc_diff = ves.perc_diff_prev
-    WHERE
-      ABS(diffs.perc_diff) > 0.15
-  )
+            id
+            , person
+            , MAX(perc_diff_prev) AS perc_diff
+        FROM {{ ref('vw_active_energy') }}
+        GROUP BY id, person
+    ) AS diffs
+    JOIN {{ ref('vw_active_energy') }} AS ves
+        ON diffs.id = ves.id
+        AND diffs.perc_diff = ves.perc_diff_prev
+    WHERE ABS(diffs.perc_diff) > 0.15
+
+)
+
 SELECT
-  vae.id,
-  vae.person,
-  MIN(vae.date) start_date,
-  MAX(vae.date) end_date,
-  diff_check.date AS updated_end_date
-FROM
-  {{ ref('vw_active_energy') }} vae
-  LEFT JOIN diff_check ON vae.id = diff_check.id
+    vae.id
+    , vae.person
+    , MIN(vae.date) AS start_date
+    , MAX(vae.date) AS end_date
+    , diff_check.date AS updated_end_date
+FROM {{ ref('vw_active_energy') }} AS vae
+LEFT JOIN diff_check
+    ON vae.id = diff_check.id
 {% if is_incremental() %}
 WHERE vae.date::timestamp > (SELECT MAX(end_date::timestamp) FROM {{ this }})
-OR vae.date::date > current_date - interval '30 day' -- reprocess last 30 days to capture updates
+    OR vae.date::date > current_date - INTERVAL '30 day'
+    -- reprocess last 30 days to capture updates
 {% endif %}
 GROUP BY
-  vae.id,
-  vae.person,
-  diff_check.date
-ORDER BY
-  start_date DESC
+    vae.id
+    , vae.person
+    , diff_check.date
+ORDER BY start_date DESC

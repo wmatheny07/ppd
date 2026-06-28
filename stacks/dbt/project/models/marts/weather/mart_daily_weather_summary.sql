@@ -4,96 +4,117 @@
 -- Designed for Superset dashboards and health correlation analysis.
 -- =====================================================================
 
-with hourly as (
+{{
+    config(
+        materialized='table'
+    )
+}}
 
-    select * from {{ ref('int_weather_air_quality_combined') }}
+WITH hourly AS (
+
+    SELECT * FROM {{ ref('int_weather_air_quality_combined') }}
 
 ),
 
-daily as (
+daily AS (
 
-    select
-        location_id,
-        location_name,
-        context,
-        date(observation_hour) as observation_date,
+    SELECT
+        location_id
+        , location_name
+        , context
+        , DATE(observation_hour) AS observation_date
 
         -- Temperature
-        min(temperature_f)      as temp_min_f,
-        max(temperature_f)      as temp_max_f,
-        avg(temperature_f)      as temp_avg_f,
-        max(temperature_f) - min(temperature_f) as temp_range_f,
-        min(feels_like_f)       as feels_like_min_f,
-        max(feels_like_f)       as feels_like_max_f,
+        , MIN(temperature_f)      AS temp_min_f
+        , MAX(temperature_f)      AS temp_max_f
+        , AVG(temperature_f)      AS temp_avg_f
+        , MAX(temperature_f) - MIN(temperature_f) AS temp_range_f
+        , MIN(feels_like_f)       AS feels_like_min_f
+        , MAX(feels_like_f)       AS feels_like_max_f
 
         -- Humidity
-        avg(relative_humidity_pct)  as humidity_avg_pct,
-        min(relative_humidity_pct)  as humidity_min_pct,
-        max(relative_humidity_pct)  as humidity_max_pct,
-        avg(dew_point_f)            as dew_point_avg_f,
+        , AVG(relative_humidity_pct)  AS humidity_avg_pct
+        , MIN(relative_humidity_pct)  AS humidity_min_pct
+        , MAX(relative_humidity_pct)  AS humidity_max_pct
+        , AVG(dew_point_f)            AS dew_point_avg_f
 
         -- Pressure
-        avg(pressure_msl_hpa)       as pressure_avg_hpa,
-        min(pressure_msl_hpa)       as pressure_min_hpa,
-        max(pressure_msl_hpa)       as pressure_max_hpa,
-        max(pressure_msl_hpa) - min(pressure_msl_hpa) as pressure_swing_hpa,
-        max(abs(pressure_change_3h_hpa)) as max_pressure_change_3h_hpa,
+        , AVG(pressure_msl_hpa)       AS pressure_avg_hpa
+        , MIN(pressure_msl_hpa)       AS pressure_min_hpa
+        , MAX(pressure_msl_hpa)       AS pressure_max_hpa
+        , MAX(pressure_msl_hpa) - MIN(pressure_msl_hpa)
+            AS pressure_swing_hpa
+        , MAX(ABS(pressure_change_3h_hpa))
+            AS max_pressure_change_3h_hpa
 
         -- Wind
-        avg(wind_speed_mph)     as wind_speed_avg_mph,
-        max(wind_gusts_mph)     as wind_gust_max_mph,
+        , AVG(wind_speed_mph)     AS wind_speed_avg_mph
+        , MAX(wind_gusts_mph)     AS wind_gust_max_mph
 
         -- Precipitation
-        sum(precipitation_in)   as precipitation_total_in,
-        sum(rain_in)            as rain_total_in,
-        sum(snowfall_in)        as snowfall_total_in,
-        sum(case when precipitation_in > 0 then 1 else 0 end) as hours_with_precip,
+        , SUM(precipitation_in)   AS precipitation_total_in
+        , SUM(rain_in)            AS rain_total_in
+        , SUM(snowfall_in)        AS snowfall_total_in
+        , SUM(CASE WHEN precipitation_in > 0 THEN 1 ELSE 0 END)
+            AS hours_with_precip
 
         -- UV
-        max(uv_index)           as uv_index_max,
-        avg(uv_index)           as uv_index_avg,
-        sum(case when uv_index >= 6 then 1 else 0 end) as hours_high_uv,
+        , MAX(uv_index)           AS uv_index_max
+        , AVG(uv_index)           AS uv_index_avg
+        , SUM(CASE WHEN uv_index >= 6 THEN 1 ELSE 0 END)
+            AS hours_high_uv
 
         -- Cloud cover
-        avg(cloud_cover_pct)    as cloud_cover_avg_pct,
+        , AVG(cloud_cover_pct)    AS cloud_cover_avg_pct
 
         -- Air quality
-        avg(us_aqi_composite)   as aqi_avg,
-        max(us_aqi_composite)   as aqi_max,
-        avg(pm2_5_ugm3)         as pm2_5_avg_ugm3,
-        max(pm2_5_ugm3)         as pm2_5_max_ugm3,
-        avg(o3_ugm3)            as ozone_avg_ugm3,
+        , AVG(us_aqi_composite)   AS aqi_avg
+        , MAX(us_aqi_composite)   AS aqi_max
+        , AVG(pm2_5_ugm3)         AS pm2_5_avg_ugm3
+        , MAX(pm2_5_ugm3)         AS pm2_5_max_ugm3
+        , AVG(o3_ugm3)            AS ozone_avg_ugm3
 
         -- Pollen
-        avg(total_pollen_load)  as pollen_load_avg,
-        max(total_pollen_load)  as pollen_load_max,
-        avg(pollen_grass)       as pollen_grass_avg,
-        avg(pollen_ragweed)     as pollen_ragweed_avg,
+        , AVG(total_pollen_load)  AS pollen_load_avg
+        , MAX(total_pollen_load)  AS pollen_load_max
+        , AVG(pollen_grass)       AS pollen_grass_avg
+        , AVG(pollen_ragweed)     AS pollen_ragweed_avg
 
         -- Health scores
-        avg(exercise_suitability_score) as exercise_score_avg,
-        min(exercise_suitability_score) as exercise_score_min,
-        avg(outdoor_health_score)       as outdoor_health_score_avg,
+        , AVG(exercise_suitability_score) AS exercise_score_avg
+        , MIN(exercise_suitability_score) AS exercise_score_min
+        , AVG(outdoor_health_score)       AS outdoor_health_score_avg
 
         -- Risk category hours
-        sum(case when heat_risk_category in ('danger', 'extreme_danger') then 1 else 0 end)
-            as hours_heat_danger,
-        sum(case when heat_risk_category in ('caution', 'extreme_caution') then 1 else 0 end)
-            as hours_heat_caution,
-        sum(case when cold_risk_category in ('severe_cold', 'extreme_cold') then 1 else 0 end)
-            as hours_cold_danger,
-        sum(case when aqi_health_category in ('unhealthy', 'very_unhealthy', 'hazardous') then 1 else 0 end)
-            as hours_unhealthy_air,
+        , SUM(CASE
+            WHEN heat_risk_category IN ('danger', 'extreme_danger')
+                THEN 1 ELSE 0
+        END) AS hours_heat_danger
+        , SUM(CASE
+            WHEN heat_risk_category IN ('caution', 'extreme_caution')
+                THEN 1 ELSE 0
+        END) AS hours_heat_caution
+        , SUM(CASE
+            WHEN cold_risk_category IN ('severe_cold', 'extreme_cold')
+                THEN 1 ELSE 0
+        END) AS hours_cold_danger
+        , SUM(CASE
+            WHEN aqi_health_category
+                IN ('unhealthy', 'very_unhealthy', 'hazardous')
+                THEN 1 ELSE 0
+        END) AS hours_unhealthy_air
 
         -- Dominant conditions (mode)
-        mode() within group (order by humidity_comfort_level) as dominant_humidity_comfort,
-        mode() within group (order by aqi_health_category)   as dominant_aqi_category,
+        , MODE() WITHIN GROUP (ORDER BY humidity_comfort_level)
+            AS dominant_humidity_comfort
+        , MODE() WITHIN GROUP (ORDER BY aqi_health_category)
+            AS dominant_aqi_category
 
-        count(*) as hours_with_data
+        , COUNT(*) AS hours_with_data
 
-    from hourly
-    group by 1, 2, 3, 4
+    FROM hourly
+    GROUP BY 1, 2, 3, 4
 
 )
 
-select * from daily
+SELECT * FROM daily

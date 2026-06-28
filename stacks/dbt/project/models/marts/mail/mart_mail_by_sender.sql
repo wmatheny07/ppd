@@ -3,51 +3,63 @@
 -- Useful for spotting subscription creep, insurance EOB patterns,
 -- VA benefit correspondence frequency, etc.
 
-with base as (
-    select * from {{ ref('stg_mail_documents') }}
+WITH base AS (
+    SELECT * FROM {{ ref('stg_mail_documents') }}
 ),
 
-sender_agg as (
-    select
-        sender,
-        document_type,
-        count(*)                                            as document_count,
-        min(document_date) filter (where document_date is not null) as first_seen,
-        max(document_date) filter (where document_date is not null) as last_seen,
-        max(document_date) filter (where document_date is not null)
-            = max(max(document_date) filter (where document_date is not null))
-            over (partition by sender)                      as is_most_recent,
-        count(*) filter (where action_required = true)      as action_count,
+sender_agg AS (
+    SELECT
+        sender
+        , document_type
+        , COUNT(*)                                  AS document_count
+        , MIN(document_date)
+            FILTER (WHERE document_date IS NOT NULL)
+            AS first_seen
+        , MAX(document_date)
+            FILTER (WHERE document_date IS NOT NULL)
+            AS last_seen
+        , MAX(document_date)
+            FILTER (WHERE document_date IS NOT NULL)
+            = MAX(MAX(document_date)
+                FILTER (WHERE document_date IS NOT NULL))
+            OVER (PARTITION BY sender)              AS is_most_recent
+        , COUNT(*)
+            FILTER (WHERE action_required = TRUE)   AS action_count
 
         -- Spend rollup (financial document types only)
-        sum(
-            case when document_type in ('statement', 'utility', 'insurance')
-            then (
-                select sum((amt->>'value')::numeric)
-                from jsonb_array_elements(dollar_amounts) as amt
-            )
-            else 0 end
-        )                                                   as total_billed,
+        , SUM(
+            CASE
+                WHEN document_type IN ('statement', 'utility', 'insurance')
+                THEN (
+                    SELECT SUM((amt->>'value')::numeric)
+                    FROM jsonb_array_elements(dollar_amounts) AS amt
+                )
+                ELSE 0
+            END
+        )                                           AS total_billed
 
-        -- Recency score for sorting (null when no dated documents exist for this sender)
-        current_date - max(document_date) filter (where document_date is not null) as days_since_last
+        -- Recency score for sorting
+        , CURRENT_DATE
+            - MAX(document_date)
+                FILTER (WHERE document_date IS NOT NULL)
+            AS days_since_last
 
-    from base
-    group by sender, document_type
+    FROM base
+    GROUP BY sender, document_type
 )
 
-select
-    sender,
-    document_type,
-    document_count,
-    first_seen,
-    last_seen,
-    days_since_last,
-    action_count,
-    round(total_billed, 2)                                  as total_billed,
+SELECT
+    sender
+    , document_type
+    , document_count
+    , first_seen
+    , last_seen
+    , days_since_last
+    , action_count
+    , ROUND(total_billed, 2)                        AS total_billed
 
     -- Engagement flag: heard from them in last 90 days
-    days_since_last <= 90                                   as is_active_sender
+    , days_since_last <= 90                         AS is_active_sender
 
-from sender_agg
-order by document_count desc, last_seen desc
+FROM sender_agg
+ORDER BY document_count DESC, last_seen DESC

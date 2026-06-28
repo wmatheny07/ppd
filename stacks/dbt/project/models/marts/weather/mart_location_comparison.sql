@@ -5,56 +5,68 @@
 -- Useful for travel planning and understanding eldercare conditions.
 -- =====================================================================
 
-with daily as (
+{{
+    config(
+        materialized='table'
+    )
+}}
 
-    select * from {{ ref('mart_daily_weather_summary') }}
+WITH daily AS (
+
+    SELECT * FROM {{ ref('mart_daily_weather_summary') }}
 
 ),
 
-with_rankings as (
+with_rankings AS (
 
-    select
-        *,
+    SELECT
+        *
 
         -- Rank locations by key health metrics each day
-        rank() over (
-            partition by observation_date
-            order by outdoor_health_score_avg desc
-        ) as best_outdoor_rank,
+        , RANK() OVER (
+            PARTITION BY observation_date
+            ORDER BY outdoor_health_score_avg DESC
+        ) AS best_outdoor_rank
 
-        rank() over (
-            partition by observation_date
-            order by temp_max_f desc
-        ) as hottest_rank,
+        , RANK() OVER (
+            PARTITION BY observation_date
+            ORDER BY temp_max_f DESC
+        ) AS hottest_rank
 
-        rank() over (
-            partition by observation_date
-            order by temp_min_f asc
-        ) as coldest_rank,
+        , RANK() OVER (
+            PARTITION BY observation_date
+            ORDER BY temp_min_f ASC
+        ) AS coldest_rank
 
-        rank() over (
-            partition by observation_date
-            order by aqi_avg asc
-        ) as best_air_quality_rank,
+        , RANK() OVER (
+            PARTITION BY observation_date
+            ORDER BY aqi_avg ASC
+        ) AS best_air_quality_rank
 
-        rank() over (
-            partition by observation_date
-            order by pressure_swing_hpa desc
-        ) as most_pressure_volatility_rank,
+        , RANK() OVER (
+            PARTITION BY observation_date
+            ORDER BY pressure_swing_hpa DESC
+        ) AS most_pressure_volatility_rank
 
         -- Location vs home base delta
-        temp_avg_f - first_value(temp_avg_f) over (
-            partition by observation_date
-            order by case when location_id = 'summerville_sc' then 0 else 1 end
-        ) as temp_delta_vs_home_f,
+        , temp_avg_f - FIRST_VALUE(temp_avg_f) OVER (
+            PARTITION BY observation_date
+            ORDER BY CASE
+                WHEN location_id = 'summerville_sc' THEN 0
+                ELSE 1
+            END
+        ) AS temp_delta_vs_home_f
 
-        aqi_avg - first_value(aqi_avg) over (
-            partition by observation_date
-            order by case when location_id = 'summerville_sc' then 0 else 1 end
-        ) as aqi_delta_vs_home
+        , aqi_avg - FIRST_VALUE(aqi_avg) OVER (
+            PARTITION BY observation_date
+            ORDER BY CASE
+                WHEN location_id = 'summerville_sc' THEN 0
+                ELSE 1
+            END
+        ) AS aqi_delta_vs_home
 
-    from daily
+    FROM daily
 
 )
 
-select * from with_rankings
+SELECT * FROM with_rankings

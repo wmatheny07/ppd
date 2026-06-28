@@ -1,20 +1,24 @@
-SELECT
-  "date"::timestamp AS record_date,
-  person,
-  {{ convert_energy("qty", "units") }}::float AS basal_energy_burned,
-  data_source,
-  metric_name
-FROM
-  (
+WITH raw_metrics AS (
+
     SELECT DISTINCT
-      JSONB_ARRAY_ELEMENTS(JSONB_ARRAY_ELEMENTS(data -> 'metrics') -> 'data') ->> 'date' "date",
-      split_part(_ab_source_file_url, '/', 3) person,
-      JSONB_ARRAY_ELEMENTS(JSONB_ARRAY_ELEMENTS(data -> 'metrics') -> 'data') ->> 'qty' qty,
-      JSONB_ARRAY_ELEMENTS(JSONB_ARRAY_ELEMENTS(data -> 'metrics') -> 'data') ->> 'units' units,
-      JSONB_ARRAY_ELEMENTS(JSONB_ARRAY_ELEMENTS(data -> 'metrics') -> 'data') ->> 'source' data_source,
-      JSONB_ARRAY_ELEMENTS(data -> 'metrics') ->> 'name' metric_name
+        JSONB_ARRAY_ELEMENTS(JSONB_ARRAY_ELEMENTS(data -> 'metrics') -> 'data') ->> 'date' AS "date"
+        , SPLIT_PART(_ab_source_file_url, '/', 3) AS person
+        , JSONB_ARRAY_ELEMENTS(JSONB_ARRAY_ELEMENTS(data -> 'metrics') -> 'data') ->> 'qty' AS qty
+        , JSONB_ARRAY_ELEMENTS(JSONB_ARRAY_ELEMENTS(data -> 'metrics') -> 'data') ->> 'units' AS units
+        , JSONB_ARRAY_ELEMENTS(JSONB_ARRAY_ELEMENTS(data -> 'metrics') -> 'data') ->> 'source' AS data_source
+        , JSONB_ARRAY_ELEMENTS(data -> 'metrics') ->> 'name' AS metric_name
     FROM
-      {{ source('health', 'metrics') }}
-  )
+        {{ source('health', 'metrics') }}
+
+)
+
+SELECT
+    "date"::TIMESTAMP AS record_date
+    , person
+    , {{ convert_energy("qty", "units") }}::FLOAT AS basal_energy_burned
+    , data_source
+    , metric_name
+FROM
+    raw_metrics
 WHERE
-  metric_name = 'basal_energy_burned'
+    metric_name = 'basal_energy_burned'

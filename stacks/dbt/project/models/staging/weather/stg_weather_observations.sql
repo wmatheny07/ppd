@@ -5,87 +5,93 @@
 -- Hourly data used as fallback for variables not in 15-min feed.
 -- =====================================================================
 
-with source as (
+{{
+    config(
+        materialized='view'
+    )
+}}
 
-    select * from {{ source('raw_weather', 'weather_observations') }}
+WITH source AS (
 
-),
-
-deduplicated as (
-
-    select
-       distinct on (location_id, observation_time, data_resolution) *
-    from source
-    order by location_id, observation_time, data_resolution, loaded_at desc
+    SELECT * FROM {{ source('raw_weather', 'weather_observations') }}
 
 ),
 
-cleaned as (
+deduplicated AS (
 
-    select
+    SELECT
+        DISTINCT ON (location_id, observation_time, data_resolution) *
+    FROM source
+    ORDER BY location_id, observation_time, data_resolution, loaded_at DESC
+
+),
+
+cleaned AS (
+
+    SELECT
         -- Keys
         {{ dbt_utils.generate_surrogate_key([
             'location_id',
             'observation_time',
             'data_resolution'
-        ]) }} as observation_key,
+        ]) }} AS observation_key
 
-        location_id,
-        location_name,
-        latitude,
-        longitude,
-        elevation_m,
-        context,
+        , location_id
+        , location_name
+        , latitude
+        , longitude
+        , elevation_m
+        , context
 
         -- Timestamps
-        observation_time,
-        data_resolution,
-        ingested_at,
-        loaded_at,
-        source,
-        model,
+        , observation_time
+        , data_resolution
+        , ingested_at
+        , loaded_at
+        , source
+        , model
 
         -- Core weather (health-relevant)
-        temperature_2m              as temperature_f,
-        apparent_temperature        as feels_like_f,
-        relative_humidity_2m        as relative_humidity_pct,
-        dew_point_2m                as dew_point_f,
+        , temperature_2m              AS temperature_f
+        , apparent_temperature        AS feels_like_f
+        , relative_humidity_2m        AS relative_humidity_pct
+        , dew_point_2m                AS dew_point_f
 
         -- Precipitation
-        precipitation               as precipitation_in,
-        rain                        as rain_in,
-        snowfall                    as snowfall_in,
-        snow_depth                  as snow_depth_in,
-        weather_code,
+        , precipitation               AS precipitation_in
+        , rain                        AS rain_in
+        , snowfall                    AS snowfall_in
+        , snow_depth                  AS snow_depth_in
+        , weather_code
 
         -- Pressure
-        pressure_msl                as pressure_msl_hpa,
-        surface_pressure            as surface_pressure_hpa,
+        , pressure_msl                AS pressure_msl_hpa
+        , surface_pressure            AS surface_pressure_hpa
 
         -- Cloud & visibility
-        cloud_cover                 as cloud_cover_pct,
-        cloud_cover_low             as cloud_cover_low_pct,
-        cloud_cover_mid             as cloud_cover_mid_pct,
-        cloud_cover_high            as cloud_cover_high_pct,
-        visibility                  as visibility_m,
+        , cloud_cover                 AS cloud_cover_pct
+        , cloud_cover_low             AS cloud_cover_low_pct
+        , cloud_cover_mid             AS cloud_cover_mid_pct
+        , cloud_cover_high            AS cloud_cover_high_pct
+        , visibility                  AS visibility_m
 
         -- Wind
-        wind_speed_10m              as wind_speed_mph,
-        wind_direction_10m          as wind_direction_deg,
-        wind_gusts_10m              as wind_gusts_mph,
+        , wind_speed_10m              AS wind_speed_mph
+        , wind_direction_10m          AS wind_direction_deg
+        , wind_gusts_10m              AS wind_gusts_mph
 
         -- UV & solar
-        uv_index,
-        uv_index_clear_sky,
-        direct_radiation            as direct_radiation_wm2,
-        diffuse_radiation           as diffuse_radiation_wm2,
+        , uv_index
+        , uv_index_clear_sky
+        , direct_radiation            AS direct_radiation_wm2
+        , diffuse_radiation           AS diffuse_radiation_wm2
 
         -- Soil
-        soil_temperature_0cm        as soil_temp_surface_f,
-        soil_moisture_0_to_1cm      as soil_moisture_0_1cm
+        , soil_temperature_0cm        AS soil_temp_surface_f
+        , soil_moisture_0_to_1cm      AS soil_moisture_0_1cm
 
-    from deduplicated
+    FROM deduplicated
 
 )
 
-select * from cleaned
+SELECT * FROM cleaned

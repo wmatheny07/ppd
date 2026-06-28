@@ -1,33 +1,38 @@
-{{ config (
+{{ config(
     materialized='view'
-)}}
+) }}
+
+WITH deduped AS (
+
+    SELECT
+        *
+        , ROW_NUMBER() OVER (
+            PARTITION BY
+                person
+                , DATE_TRUNC('week', workout_start)
+                , start_nearest_30min
+            ORDER BY workout_start, id
+        ) AS rn
+    FROM {{ ref('fct_workout_summary') }} AS vws
+    WHERE LOWER(COALESCE(data_source, '')) <> 'ifit'
+        OR (
+            LOWER(COALESCE(data_source, '')) = 'ifit'
+            AND NOT EXISTS (
+                SELECT 1
+                FROM {{ ref('fct_workout_summary') }} AS vws2
+                WHERE vws2.start_nearest_30min = vws.start_nearest_30min
+                    AND vws2.person = vws.person
+                    AND LOWER(COALESCE(vws2.data_source, '')) <> 'ifit'
+            )
+        )
+
+)
 
 SELECT
-  person,
-  date_trunc('week', workout_start) workout_week,
-  count(distinct id) total_workouts
-FROM
-(
-SELECT
-  *,
-  row_number() over (partition by person, date_trunc('week', workout_start) order by start_nearest_30min desc, workout_start, id) rn
-FROM
-  {{ ref('fct_workout_summary') }} vws
-WHERE
-    lower(data_source) <> 'ifit'
-    OR (
-      lower(data_source) = 'ifit'
-      AND NOT EXISTS(
-        SELECT
-          1
-        FROM {{ ref('fct_workout_summary') }} AS vws2
-        WHERE
-          start_nearest_30min = vws.start_nearest_30min
-          and vws2.person = vws.person
-          and lower(vws2.data_source) <> 'ifit'
-      )
-    )
-)
-where rn = 1
-group by person, date_trunc('week', workout_start)
-order by workout_week desc, person
+    person
+    , DATE_TRUNC('week', workout_start) AS workout_week
+    , COUNT(DISTINCT id) AS total_workouts
+FROM deduped
+WHERE rn = 1
+GROUP BY person, DATE_TRUNC('week', workout_start)
+ORDER BY workout_week DESC, person

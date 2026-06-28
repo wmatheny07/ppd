@@ -3,79 +3,85 @@
 -- Staging: Clean, typed, and deduplicated air quality observations.
 -- =====================================================================
 
-with source as (
+{{
+    config(
+        materialized='view'
+    )
+}}
 
-    select * from {{ source('raw_weather', 'air_quality_observations') }}
+WITH source AS (
 
-),
-
-deduplicated as (
-
-    select
-       distinct on (location_id, observation_time, data_resolution) *
-    from source
-    order by location_id, observation_time, data_resolution, loaded_at desc
+    SELECT * FROM {{ source('raw_weather', 'air_quality_observations') }}
 
 ),
 
-cleaned as (
+deduplicated AS (
 
-    select
+    SELECT
+        DISTINCT ON (location_id, observation_time, data_resolution) *
+    FROM source
+    ORDER BY location_id, observation_time, data_resolution, loaded_at DESC
+
+),
+
+cleaned AS (
+
+    SELECT
         -- Keys
         {{ dbt_utils.generate_surrogate_key([
             'location_id',
             'observation_time',
             'data_resolution'
-        ]) }} as observation_key,
+        ]) }} AS observation_key
 
-        location_id,
-        location_name,
-        latitude,
-        longitude,
-        context,
+        , location_id
+        , location_name
+        , latitude
+        , longitude
+        , context
 
         -- Timestamps
-        observation_time,
-        data_resolution,
-        ingested_at,
-        loaded_at,
-        source,
+        , observation_time
+        , data_resolution
+        , ingested_at
+        , loaded_at
+        , source
 
-        -- Particulates (µg/m³)
-        pm2_5                       as pm2_5_ugm3,
-        pm10                        as pm10_ugm3,
-        dust                        as dust_ugm3,
+        -- Particulates (ug/m3)
+        , pm2_5                       AS pm2_5_ugm3
+        , pm10                        AS pm10_ugm3
+        , dust                        AS dust_ugm3
 
-        -- Gases (µg/m³)
-        carbon_monoxide             as co_ugm3,
-        nitrogen_dioxide            as no2_ugm3,
-        sulphur_dioxide             as so2_ugm3,
-        ozone                       as o3_ugm3,
+        -- Gases (ug/m3)
+        , carbon_monoxide             AS co_ugm3
+        , nitrogen_dioxide            AS no2_ugm3
+        , sulphur_dioxide             AS so2_ugm3
+        , ozone                       AS o3_ugm3
 
         -- UV
-        uv_index,
-        uv_index_clear_sky,
+        , uv_index
+        , uv_index_clear_sky
 
         -- US AQI (0-500 scale)
-        us_aqi                      as us_aqi_composite,
-        us_aqi_pm2_5,
-        us_aqi_pm10,
-        us_aqi_nitrogen_dioxide     as us_aqi_no2,
-        us_aqi_ozone                as us_aqi_o3,
-        us_aqi_sulphur_dioxide      as us_aqi_so2,
-        us_aqi_carbon_monoxide      as us_aqi_co,
-        european_aqi                as eu_aqi_composite,
+        , us_aqi                      AS us_aqi_composite
+        , us_aqi_pm2_5
+        , us_aqi_pm10
+        , us_aqi_nitrogen_dioxide     AS us_aqi_no2
+        , us_aqi_ozone                AS us_aqi_o3
+        , us_aqi_sulphur_dioxide      AS us_aqi_so2
+        , us_aqi_carbon_monoxide      AS us_aqi_co
+        , european_aqi                AS eu_aqi_composite
 
-        -- Pollen (grains/m³)
-        alder_pollen                as pollen_alder,
-        birch_pollen                as pollen_birch,
-        grass_pollen                as pollen_grass,
-        mugwort_pollen              as pollen_mugwort,
-        olive_pollen                as pollen_olive,
-        ragweed_pollen              as pollen_ragweed
+        -- Pollen (grains/m3)
+        , alder_pollen                AS pollen_alder
+        , birch_pollen                AS pollen_birch
+        , grass_pollen                AS pollen_grass
+        , mugwort_pollen              AS pollen_mugwort
+        , olive_pollen                AS pollen_olive
+        , ragweed_pollen              AS pollen_ragweed
 
-    from deduplicated
+    FROM deduplicated
 
 )
 
-select * from cleaned
+SELECT * FROM cleaned

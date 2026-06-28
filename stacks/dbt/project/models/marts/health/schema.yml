@@ -243,3 +243,90 @@ models:
   - name: updated_end_date
     description: "Corrected end date derived from the interval where the moving average percent difference exceeds 15%, indicating the true workout end."
 
+- name: fct_resting_hr
+  description: "Incremental mart of daily resting heart rate readings per person, sourced from Apple Watch overnight measurements via vw_resting_hr_metrics."
+  columns:
+  - name: id
+    description: "Surrogate key derived from MD5 of record_date, person, and resting_heart_rate."
+    tests: [ not_null, unique ]
+  - name: record_date
+    description: "Date of the resting heart rate reading."
+    tests: [ not_null ]
+  - name: person
+    description: "Person identifier."
+    tests: [ not_null ]
+  - name: resting_heart_rate
+    description: "Resting heart rate in BPM as computed by Apple Watch from overnight readings."
+    tests:
+    - not_null
+    - dbt_utils.accepted_range:
+        arguments:
+          min_value: 30
+          max_value: 120
+
+- name: fct_step_count_summary
+  description: "Incremental mart aggregating daily step counts per person. Multiple records per day from different sources are summed. Only days with step_count > 0 are included."
+  columns:
+  - name: record_date
+    description: "Date of the step count record."
+    tests: [ not_null ]
+  - name: person
+    description: "Person identifier."
+    tests: [ not_null ]
+  - name: step_count
+    description: "Total steps taken on this date across all sources."
+    tests:
+    - dbt_utils.accepted_range:
+        arguments:
+          min_value: 1
+
+- name: fct_time_in_daylight_summary
+  description: "Incremental mart aggregating daily time spent in daylight per person. Multiple records per day are summed. Only days with time_in_daylight > 0 are included."
+  columns:
+  - name: record_date
+    description: "Date of the daylight record."
+    tests: [ not_null ]
+  - name: person
+    description: "Person identifier."
+    tests: [ not_null ]
+  - name: time_in_daylight
+    description: "Total time spent in daylight on this date in minutes."
+    tests:
+    - dbt_utils.accepted_range:
+        arguments:
+          min_value: 1
+
+- name: fct_sleep_calories_daylight
+  description: "View joining fct_sleep_calories with fct_time_in_daylight_summary to enable analysis of the relationship between sleep quality, calorie burn, and daily sun exposure."
+  columns:
+  - name: record_date
+    description: "Date of the record."
+    tests: [ not_null ]
+  - name: person
+    description: "Person identifier."
+    tests: [ not_null ]
+  - name: total_sleep
+    description: "Total sleep duration in minutes for the night."
+    tests:
+    - dbt_utils.accepted_range:
+        arguments:
+          min_value: 0
+  - name: awake
+    description: "Duration of time awake during the sleep window in minutes."
+    tests:
+    - dbt_utils.accepted_range:
+        arguments:
+          min_value: 0
+  - name: calories_burned
+    description: "Total active kilocalories burned across all workouts on the same date."
+    tests:
+    - dbt_utils.accepted_range:
+        arguments:
+          min_value: 0
+  - name: time_in_daylight
+    description: "Total time spent in daylight on this date in minutes."
+    tests:
+    - dbt_utils.accepted_range:
+        arguments:
+          min_value: 0
+
