@@ -17,9 +17,24 @@ WITH raw_metrics AS (
         , JSONB_ARRAY_ELEMENTS(JSONB_ARRAY_ELEMENTS(data -> 'metrics') -> 'data') ->> 'inBedEnd' AS in_bed_end
         , JSONB_ARRAY_ELEMENTS(JSONB_ARRAY_ELEMENTS(data -> 'metrics') -> 'data') ->> 'sleepEnd' AS sleep_end
         , JSONB_ARRAY_ELEMENTS(data -> 'metrics') ->> 'name' AS metric_name
+        , m._airbyte_extracted_at AS extracted_at
     FROM
-        {{ source('health', 'metrics') }}
-
+        {{ source('health', 'metrics') }} m
+),
+unique_metrics
+as
+(
+	select
+		*
+	from
+	(
+		select
+			*
+			, CASE WHEN ROW_NUMBER() OVER (PARTITION BY person, "date" ORDER BY extracted_at DESC) = 1 THEN TRUE ELSE FALSE END AS is_latest
+		from 
+			raw_metrics
+	)
+	where is_latest = true
 )
 
 SELECT
@@ -42,7 +57,7 @@ SELECT
         + COALESCE(deep::FLOAT, 0)
         + COALESCE(awake::FLOAT, 0) AS total_sleep
 FROM
-    raw_metrics
+    unique_metrics
 WHERE
     metric_name = 'sleep_analysis'
     {% if is_incremental() %}
