@@ -117,7 +117,21 @@ def bank_statement_transactions(
     client = anthropic.get_client()
     all_transactions: list[dict] = []
     for i, chunk in enumerate(chunks):
-        txns = _extract_transactions(client, chunk, year)
+        try:
+            txns = _extract_transactions(client, chunk, year)
+        except Exception as exc:
+            context.log.error(
+                f"Claude API call failed for document {document_id} "
+                f"(chunk {i + 1}/{len(chunks)}): {exc}"
+            )
+            postgres.log_pipeline_event(
+                stage="bank_transactions",
+                status="error",
+                document_id=document_id,
+                message=f"Claude API call failed on chunk {i + 1}/{len(chunks)}: {exc}",
+                dagster_run_id=context.run_id,
+            )
+            raise
         context.log.info(f"  Chunk {i + 1}/{len(chunks)}: {len(txns)} transactions found")
         all_transactions.extend(txns)
 

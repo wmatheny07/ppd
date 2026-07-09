@@ -18,6 +18,8 @@ inbox AS (
 
         -- Age buckets for dashboard filtering
         , CASE
+            WHEN document_date IS NULL
+                THEN 'Unknown Date'
             WHEN document_date >= CURRENT_DATE - INTERVAL '7 days'
                 THEN 'This Week'
             WHEN document_date >= CURRENT_DATE - INTERVAL '30 days'
@@ -37,16 +39,15 @@ inbox AS (
 
     FROM classified
     WHERE action_required = TRUE
-        AND document_date IS NOT NULL
 ),
 
 ranked AS (
     SELECT
         *
-        , ROW_NUMBER() OVER (ORDER BY document_date DESC)
+        , ROW_NUMBER() OVER (ORDER BY document_date DESC NULLS LAST)
             AS inbox_rank
     FROM inbox
 )
 
 SELECT * FROM ranked
-ORDER BY document_date DESC
+ORDER BY document_date DESC NULLS LAST

@@ -51,12 +51,21 @@ def enriched_mail_documents(
     postgres: PostgresResource,
     anthropic: AnthropicResource,
 ) -> dict:
-    if raw_mail_documents.get("skipped"):
-        context.log.info("Upstream asset was skipped — nothing to enrich.")
-        return {"skipped": True}
-
     document_id = raw_mail_documents["document_id"]
-    minio_key = raw_mail_documents["minio_key"]
+    minio_key = raw_mail_documents.get("minio_key")
+
+    # Check enrichment state directly rather than trusting upstream's "skipped"
+    # flag -- extraction skips re-extracting on a file-hash match, but that
+    # document may still be missing enrichment (e.g. a prior enrichment
+    # attempt crashed). Re-triggered runs for already-extracted documents
+    # rely on this check to actually do the enrichment work.
+    already_enriched = postgres.fetch_one(
+        "SELECT document_id FROM mail_raw.mail_enrichments WHERE document_id = %s",
+        (document_id,),
+    )
+    if already_enriched:
+        context.log.info(f"Document {document_id} already enriched — skipping.")
+        return {"document_id": document_id, "minio_key": minio_key, "skipped": True}
 
     row = postgres.fetch_one(
         "SELECT raw_text, extraction_status FROM mail_raw.mail_documents WHERE id = %s",
@@ -97,26 +106,37 @@ def enriched_mail_documents(
 
     # CLASSIFICATION_PROMPT is constant across all runs — cache it to avoid
     # re-tokenizing on every document processed in the same session.
-    message = client.messages.create(
-        model=MODEL,
-        max_tokens=1000,
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": CLASSIFICATION_PROMPT,
-                        "cache_control": {"type": "ephemeral"},
-                    },
-                    {
-                        "type": "text",
-                        "text": clean_text,
-                    },
-                ],
-            }
-        ],
-    )
+    try:
+        message = client.messages.create(
+            model=MODEL,
+            max_tokens=1000,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": CLASSIFICATION_PROMPT,
+                            "cache_control": {"type": "ephemeral"},
+                        },
+                        {
+                            "type": "text",
+                            "text": clean_text,
+                        },
+                    ],
+                }
+            ],
+        )
+    except Exception as exc:
+        context.log.error(f"Claude API call failed for document {document_id}: {exc}")
+        postgres.log_pipeline_event(
+            stage="enrichment",
+            status="error",
+            document_id=document_id,
+            message=f"Claude API call failed: {exc}",
+            dagster_run_id=context.run_id,
+        )
+        raise
 
     usage = message.usage
     tokens_used = usage.input_tokens + usage.output_tokens

@@ -139,7 +139,7 @@ def raw_mail_documents(
             message=f"Duplicate skipped — hash match for {key}",
             dagster_run_id=context.run_id,
         )
-        return {"document_id": existing["id"], "skipped": True}
+        return {"document_id": existing["id"], "minio_key": key, "skipped": True}
 
     context.log.info(f"Extracting text from {key}")
     extraction_error: str | None = None

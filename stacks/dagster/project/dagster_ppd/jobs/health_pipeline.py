@@ -47,6 +47,24 @@ COMMON_ENV = {
 }
 
 
+def _run_dbt(logger, script: str) -> None:
+    """Stream a bash script's output line-by-line to the Dagster logger so dbt errors appear in the UI."""
+    proc = subprocess.Popen(
+        script,
+        shell=True,
+        executable="/bin/bash",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        env=COMMON_ENV,
+        text=True,
+    )
+    for line in proc.stdout:
+        logger.info(line.rstrip())
+    proc.wait()
+    if proc.returncode != 0:
+        raise RuntimeError(f"dbt command exited with code {proc.returncode} — see log output above")
+
+
 @failure_hook
 def health_pipeline_failure_alert(context):
     """Send a Resend alert when any op in health_pipeline_job fails."""
@@ -240,8 +258,7 @@ def dbt_source_freshness(context):
 def dbt_build_health_marts(context):
     logger = get_dagster_logger()
     logger.info("Running dbt build for health marts")
-    subprocess.run(
-        f"""
+    _run_dbt(logger, f"""
         set -euo pipefail
         cd {DBT_PROJECT_DIR}
         mkdir -p {DBT_ARTIFACTS_DIR}/logs {DBT_ARTIFACTS_DIR}/target
@@ -262,20 +279,14 @@ def dbt_build_health_marts(context):
                 --select "staging.health marts.health" \
                 --exclude "mv_espn_play_stat"
         fi
-        """,
-        shell=True,
-        check=True,
-        executable="/bin/bash",
-        env=COMMON_ENV,
-    )
+    """)
 
 
 @op(ins={"start": In(Nothing)})
 def dbt_docs_generate(context):
     logger = get_dagster_logger()
     logger.info("Generating dbt docs for health project")
-    subprocess.run(
-        f"""
+    _run_dbt(logger, f"""
         set -euo pipefail
         cd {DBT_PROJECT_DIR}
         dbt docs generate \
@@ -285,12 +296,7 @@ def dbt_docs_generate(context):
         cp {DBT_ARTIFACTS_DIR}/target/index.html /opt/dbt-docs/index.html
         cp {DBT_ARTIFACTS_DIR}/target/catalog.json /opt/dbt-docs/catalog.json
         cp {DBT_ARTIFACTS_DIR}/target/manifest.json /opt/dbt-docs/manifest.json
-        """,
-        shell=True,
-        check=True,
-        executable="/bin/bash",
-        env=COMMON_ENV,
-    )
+    """)
 
 
 # @op(ins={"start": In(Nothing)})
