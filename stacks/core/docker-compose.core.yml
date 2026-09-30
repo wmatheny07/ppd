@@ -57,14 +57,30 @@ services:
   minio:
     image: minio/minio:latest
     container_name: minio
-    command: server /data --console-address ":9001"
+    entrypoint: >
+      sh -c "
+        if ! touch /data/.startup-check 2>/dev/null; then
+          echo 'ERROR: /data is not accessible (nasdrive may not be mounted or unlocked).' && exit 1;
+        fi;
+        rm -f /data/.startup-check;
+        exec minio server /data --console-address ':9001'
+      "
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_KMS_SECRET_KEY: ${MINIO_KMS_SECRET_KEY}
+      MC_CONFIG_DIR: ${MC_CONFIG_DIR}
     volumes:
       - /media/nasdrive/mail_intelligence/minio:/data
     ports:
       - "9000:9000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
     networks:
       - core_data_net
 

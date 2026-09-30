@@ -19,9 +19,9 @@ SELECT
     , person
     , total_sleep
     , awake
-    , calories_burned
+    , coalesce(calories_burned, 0) AS calories_burned
 FROM {{ ref('vw_sleep_metrics') }} AS vsm
-JOIN cals_burned
+LEFT JOIN cals_burned
     ON vsm.record_date = cals_burned.record_date
 {%- if is_incremental() %}
 WHERE vsm.record_date::date > (SELECT MAX(record_date::date) FROM {{ this }})

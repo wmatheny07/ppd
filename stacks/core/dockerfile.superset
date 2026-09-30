@@ -10,8 +10,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 RUN /app/.venv/bin/python -m ensurepip --upgrade && \
-    /app/.venv/bin/python -m pip install --no-cache-dir psycopg2-binary && \
+    /app/.venv/bin/python -m pip install --no-cache-dir psycopg2-binary playwright && \
     chown -R superset:superset /app/.venv
+
+# Playwright-managed Chromium for report/thumbnail rendering
+# (PLAYWRIGHT_REPORTS_AND_THUMBNAILS). Installed to a shared path so the
+# unprivileged `superset` user can read it at runtime.
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN /app/.venv/bin/playwright install --with-deps chromium && \
+    chmod -R o+rx /ms-playwright
 
 USER superset
 WORKDIR /app

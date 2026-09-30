@@ -114,6 +114,10 @@ ENABLE_UI_THEME_ADMINISTRATION = True
 # ===== Alerts & Reports =====
 FEATURE_FLAGS = {
     "ALERT_REPORTS": True,
+    # Replaces Selenium with Playwright for report/thumbnail screenshots.
+    # Requires the playwright pip package + browser binaries in the image
+    # (see dockerfile.superset).
+    "PLAYWRIGHT_REPORTS_AND_THUMBNAILS": True,
 }
 ALERT_REPORTS_NOTIFICATION_DRY_RUN = False
 
