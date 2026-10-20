@@ -25,6 +25,8 @@ from .db import (
     get_dashboard_summary, get_findings_paged, update_finding_status,
     get_action_plans, update_action_plan_status,
     get_version_drift_latest, get_distinct_images,
+    start_remediation_run, complete_remediation_run, get_remediation_candidates,
+    nightly_scan_handled,
 )
 from .scanner import run_full_scan, run_version_check
 
@@ -63,6 +65,17 @@ def _fire_and_forget(coro: Coroutine, lock: threading.Lock, scan_label: str) -> 
     return True
 
 
+def _scheduled_full_scan() -> None:
+    """Fallback nightly scan: stands down if the auto-remediation runner owns tonight's scan."""
+    try:
+        if nightly_scan_handled():
+            logger.info("Scheduled full scan skipped — remediation run in progress or a scan ran recently")
+            return
+    except Exception:
+        logger.exception("Could not check remediation state — scanning anyway")
+    _fire_and_forget(run_full_scan(), _full_scan_lock, "full_scan")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Apply schema idempotently before accepting traffic
@@ -70,17 +83,21 @@ async def lifespan(app: FastAPI):
 
     scan_cron    = os.environ.get("SCAN_SCHEDULE_CRON", "0 2 * * *")
     version_cron = os.environ.get("VERSION_CHECK_SCHEDULE_CRON", "0 3 * * 1")
+    tz = "America/New_York"  # from_crontab ignores the scheduler's timezone, so pass it explicitly
 
-    _scheduler.add_job(
-        lambda: _fire_and_forget(run_full_scan(), _full_scan_lock, "full_scan"),
-        CronTrigger.from_crontab(scan_cron),
-        id="full_scan",
-        max_instances=1,
-        coalesce=True,
-    )
+    # The host auto-remediation runner (01:00) triggers /scan/full itself when it
+    # finishes; this schedule is the fallback (see _scheduled_full_scan). "off" disables it.
+    if scan_cron.strip().lower() != "off":
+        _scheduler.add_job(
+            _scheduled_full_scan,
+            CronTrigger.from_crontab(scan_cron, timezone=tz),
+            id="full_scan",
+            max_instances=1,
+            coalesce=True,
+        )
     _scheduler.add_job(
         lambda: _fire_and_forget(run_version_check(), _version_check_lock, "version_check"),
-        CronTrigger.from_crontab(version_cron),
+        CronTrigger.from_crontab(version_cron, timezone=tz),
         id="version_check",
         max_instances=1,
         coalesce=True,
@@ -101,10 +118,10 @@ async def health():
 
 
 @app.post("/scan/full")
-async def trigger_full_scan():
+async def trigger_full_scan(notify: bool = True):
     """Trigger a full CVE + SBOM scan. Returns immediately; scan runs in a background thread.
-    Returns 409 if a full scan is already in progress."""
-    started = _fire_and_forget(run_full_scan(), _full_scan_lock, "full_scan")
+    Returns skipped if a full scan is already in progress. notify=false suppresses the email."""
+    started = _fire_and_forget(run_full_scan(notify=notify), _full_scan_lock, "full_scan")
     if not started:
         return {"status": "skipped", "reason": "full scan already in progress"}
     return {"status": "accepted", "type": "full_scan"}
@@ -129,6 +146,26 @@ async def scan_status():
             if run.get(key) is not None:
                 run[key] = run[key].isoformat()
     return {"runs": runs}
+
+
+# ─── Auto-remediation runner (host-side, not routed by nginx) ─────────────────
+
+@app.get("/internal/remediation-candidates")
+async def internal_remediation_candidates():
+    return {"images": get_remediation_candidates()}
+
+
+@app.post("/internal/remediation-runs")
+async def internal_start_remediation_run(body: dict):
+    if "started_at" not in body:
+        raise HTTPException(status_code=400, detail="started_at is required")
+    return {"id": start_remediation_run(body["started_at"], body.get("status", "running"))}
+
+
+@app.post("/internal/remediation-runs/{run_id}/complete")
+async def internal_complete_remediation_run(run_id: int, body: dict):
+    complete_remediation_run(run_id, body)
+    return {"ok": True}
 
 
 # ─── Frontend API ─────────────────────────────────────────────────────────────

@@ -25,6 +25,13 @@ from .agent import analyze_findings
 
 logger = logging.getLogger(__name__)
 
+# Packages whose findings are dropped before storage. linux-libc-dev is kernel
+# headers only: containers run on the host kernel, so its CVEs aren't reachable
+# inside an image and they made up ~23% of all HIGH findings.
+IGNORED_PACKAGES = {
+    p.strip() for p in os.environ.get("TRIVY_IGNORED_PACKAGES", "linux-libc-dev").split(",") if p.strip()
+}
+
 
 # ─── MinIO helper ─────────────────────────────────────────────────────────────
 
@@ -71,10 +78,12 @@ def _ensure_minio_bucket() -> None:
 
 # ─── Trivy ────────────────────────────────────────────────────────────────────
 
-def trivy_scan(image_ref: str) -> list[dict]:
+def trivy_scan(image_ref: str) -> list[dict] | None:
     """
-    Run Trivy against an image and return a flat list of vulnerability dicts.
+    Run Trivy against an image and return a flat list of vulnerability dicts,
+    or None if the scan itself failed (so callers don't mistake it for "clean").
     Exit code 1 from Trivy means vulnerabilities were found — still valid output.
+    Duplicate (cve, package) pairs — Trivy reports one per file path — are collapsed.
     """
     ignore_file = "/app/trivyignore"
     cmd = ["trivy", "image", "--format", "json", "--quiet"]
@@ -88,17 +97,22 @@ def trivy_scan(image_ref: str) -> list[dict]:
     )
     if result.returncode not in (0, 1):
         logger.warning("Trivy unexpected exit %d for %s: %s", result.returncode, image_ref, result.stderr[:300])
-        return []
+        return None
 
     try:
         data = json.loads(result.stdout)
     except json.JSONDecodeError:
         logger.warning("Trivy returned non-JSON for %s", image_ref)
-        return []
+        return None
 
     findings: list[dict] = []
+    seen: set[tuple] = set()
     for result_block in data.get("Results") or []:
         for vuln in result_block.get("Vulnerabilities") or []:
+            key = (vuln.get("VulnerabilityID"), vuln.get("PkgName"))
+            if key in seen or vuln.get("PkgName") in IGNORED_PACKAGES:
+                continue
+            seen.add(key)
             findings.append(
                 {
                     "cve_id":          vuln.get("VulnerabilityID"),
@@ -147,7 +161,7 @@ def syft_sbom(image_ref: str) -> dict | None:
 
 # ─── Orchestration ────────────────────────────────────────────────────────────
 
-async def run_full_scan() -> None:
+async def run_full_scan(notify: bool = True) -> None:
     """
     Full scan workflow:
       1. Discover running images via Docker socket
@@ -155,6 +169,7 @@ async def run_full_scan() -> None:
       3. Syft SBOM per image → MinIO
       4. LangGraph + Claude analysis → action plans
       5. Persist all findings + plans to Postgres
+      6. Email the report (unless notify=False)
     """
     run_id = str(uuid.uuid4())
     logger.info("Starting full scan run %s", run_id)
@@ -162,6 +177,7 @@ async def run_full_scan() -> None:
 
     scan_run_id = begin_scan_run(run_id, "full")
     all_findings: list[dict] = []
+    scanned_ok: list[str] = []
 
     try:
         images = get_running_images()
@@ -172,6 +188,10 @@ async def run_full_scan() -> None:
 
             # CVE scan
             findings = trivy_scan(image_ref)
+            if findings is None:
+                logger.warning("Skipping %s — Trivy scan failed; its findings are left untouched", image_ref)
+                continue
+            scanned_ok.append(img["image_name"])
             for f in findings:
                 f.update(
                     {
@@ -189,15 +209,17 @@ async def run_full_scan() -> None:
                 minio_path = _store_sbom_to_minio(sbom, image_ref, scan_run_id)
                 store_sbom_record(scan_run_id, img, sbom, minio_path)
 
-        # Auto-resolve findings that disappeared in this scan
-        scanned_image_names = list({img["image_name"] for img in images})
-        resolved = auto_resolve_fixed_findings(scan_run_id, scanned_image_names)
+        # Auto-resolve findings that disappeared in this scan, plus findings for
+        # images that are no longer running at all. Images whose scan failed are kept.
+        running_names = {img["image_name"] for img in images}
+        failed_names = list(running_names - set(scanned_ok))
+        resolved = auto_resolve_fixed_findings(scan_run_id, list(set(scanned_ok)), failed_names)
         if resolved:
             logger.info("Auto-resolved %d findings no longer present in scanned images", resolved)
 
         # AI analysis + action plans
         if all_findings:
-            await analyze_findings(scan_run_id, all_findings)
+            await analyze_findings(scan_run_id, all_findings, notify=notify)
 
         critical = sum(1 for f in all_findings if f.get("severity") == "CRITICAL")
         high     = sum(1 for f in all_findings if f.get("severity") == "HIGH")

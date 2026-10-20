@@ -6,7 +6,8 @@ Graph: triage_node → plan_node → store_node → notify_node → END
 - triage_node  : Claude receives a compact per-image severity summary and returns
                  an image → priority mapping ("immediate"/"this_week"/"backlog").
 - plan_node    : Claude generates step-by-step remediation per (priority, image) group,
-                 pulling the top CVEs for that image from the full findings list.
+                 pulling the top CVEs for that image from the full findings list and
+                 what the night's auto-remediation run did (or couldn't do) for it.
 - store_node   : persists action plans to Postgres.
 - notify_node  : sends a Resend email with PDF attachment summarising the scan results.
 """
@@ -22,12 +23,13 @@ import anthropic
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 
-from .db import store_action_plan
+from .db import get_latest_remediation, store_action_plan
 from .report import build_pdf_report, build_email_html
 
 logger = logging.getLogger(__name__)
 
 _client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+_MODEL = os.environ.get("ANALYSIS_MODEL", "claude-opus-5-5")
 
 _STACK_CONTEXT = """\
 You are a security analyst reviewing vulnerability scan results for a self-hosted \
@@ -106,6 +108,8 @@ class SecurityState(TypedDict):
     image_priorities: dict[str, str]   # image_name → "immediate"|"this_week"|"backlog"
     top_concerns: list[str]
     action_plans: list[dict]
+    remediation: dict | None           # latest auto-remediation run, if one ran tonight
+    notify: bool
     messages: Annotated[list, add_messages]
 
 
@@ -134,15 +138,23 @@ Return JSON only, no markdown:
 }}"""
 
     response = _client.messages.create(
-        model="claude-opus-4-7",
-        max_tokens=1024,
+        model=_MODEL,
+        max_tokens=4096,
         system=_STACK_CONTEXT,
         messages=[{"role": "user", "content": prompt}],
     )
 
     parsed = _parse_json(response.content[0].text, "triage_node")
     if not parsed:
-        return {"image_priorities": {}, "top_concerns": []}
+        # Fall back to severity-based priorities so plans still get generated
+        logger.warning("Triage unparseable — using severity-based priorities")
+        return {
+            "image_priorities": {
+                img: "immediate" if c.get("CRITICAL") else "this_week" if c.get("HIGH") else "backlog"
+                for img, c in summary.items()
+            },
+            "top_concerns": [],
+        }
 
     priorities = parsed.get("image_priorities", {})
     concerns   = parsed.get("top_concerns", [])
@@ -170,18 +182,25 @@ def plan_node(state: SecurityState) -> dict:
     for f in state["findings"]:
         by_image.setdefault(f.get("image_name", "unknown"), []).append(f)
 
+    remediation_by_image = {
+        a["image_name"]: a for a in ((state.get("remediation") or {}).get("actions") or [])
+    }
+
     action_plans: list[dict] = []
 
     for priority_label in ("immediate", "this_week", "backlog"):
         images_at_priority = [img for img, p in priorities.items() if p == priority_label]
         for image in images_at_priority:
             image_findings = by_image.get(image, [])
-            if not image_findings:
+            # Plans are only for images still carrying CRITICAL/HIGH findings
+            if not any(f.get("severity") in ("CRITICAL", "HIGH") for f in image_findings):
                 continue
 
-            # Send top 5 worst CVEs (by CVSS) to keep the plan prompt tight
+            # Send top 5 worst CRITICAL/HIGH CVEs (by CVSS) to keep the plan prompt tight
             top = sorted(
-                [f for f in image_findings if f.get("cvss_score")],
+                [f for f in image_findings
+                 if f.get("cvss_score") and f.get("severity") in ("CRITICAL", "HIGH")]
+                or [f for f in image_findings if f.get("cvss_score")],
                 key=lambda f: f["cvss_score"],
                 reverse=True,
             )[:5]
@@ -196,6 +215,24 @@ def plan_node(state: SecurityState) -> dict:
                 for f in top
             ]
 
+            remediation = remediation_by_image.get(image)
+            if remediation:
+                remediation_text = (
+                    f"Tonight's automated remediation already tried this image: "
+                    f"strategy={remediation.get('strategy')}, outcome={remediation.get('outcome')}, "
+                    f"reason={remediation.get('reason')!r}, "
+                    f"version {remediation.get('old_version') or '?'} -> {remediation.get('new_version') or '?'}. "
+                    "The automation only rebuilds or re-pulls the SAME tag, never changes version pins, and "
+                    "refuses version jumps that could run irreversible data migrations. The findings above "
+                    "are what remains AFTER that attempt, so the plan must cover what a human has to do "
+                    "(e.g. bump a pinned tag, a major upgrade, replace an unmaintained image, wait for upstream)."
+                )
+            else:
+                remediation_text = (
+                    "No automated remediation was attempted for this image tonight (no fix available "
+                    "on its current tag, or it is excluded from automation)."
+                )
+
             prompt = f"""Generate a remediation plan for {priority_label.upper()} priority findings \
 in the Docker image "{image}".
 
@@ -207,17 +244,20 @@ Total findings for this image: \
 {sum(1 for f in image_findings if f.get('severity') == 'HIGH')} high, \
 {sum(1 for f in image_findings if f.get('severity') == 'MEDIUM')} medium
 
+{remediation_text}
+
 Return JSON only, no markdown:
 {{
   "title": "<short imperative title, e.g. Patch critical OpenSSL CVEs in nginx>",
   "action_type": "patch|upgrade|config_change|monitor",
   "description": "<2-3 sentences: what the risk is and what action to take>",
+  "blocker": "<one sentence: why this could not be fixed automatically>",
   "steps": ["<step 1>", "<step 2>", "..."],
   "estimated_effort": "30min|2hrs|1day|1week"
 }}"""
 
             response = _client.messages.create(
-                model="claude-opus-4-7",
+                model=_MODEL,
                 max_tokens=1024,
                 system=_STACK_CONTEXT,
                 messages=[{"role": "user", "content": prompt}],
@@ -247,6 +287,9 @@ def store_node(state: SecurityState) -> dict:
 
 def notify_node(state: SecurityState) -> dict:
     """Send Resend email with PDF report. Failures are logged but never raise."""
+    if not state.get("notify", True):
+        logger.info("notify=False — skipping scan report email")
+        return {}
     api_key = os.environ.get("RESEND_API_KEY", "")
     if not api_key:
         logger.info("RESEND_API_KEY not set — skipping scan report email")
@@ -260,23 +303,42 @@ def notify_node(state: SecurityState) -> dict:
         findings    = state["findings"]
         plans       = state["action_plans"]
         concerns    = state["top_concerns"]
+        remediation = state.get("remediation")
 
         from collections import Counter
         severity_counts = dict(Counter(f.get("severity", "UNKNOWN") for f in findings))
 
-        from datetime import datetime, timezone
-        scan_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        # Per-image remaining CRITICAL/HIGH counts so the report can show a plan for each
+        remaining: dict[str, dict] = {}
+        for f in findings:
+            if f.get("severity") in ("CRITICAL", "HIGH"):
+                r = remaining.setdefault(f.get("image_name", "unknown"), {"CRITICAL": 0, "HIGH": 0})
+                r[f["severity"]] += 1
 
-        pdf_bytes = build_pdf_report(scan_run_id, severity_counts, plans, concerns, scan_date)
-        html_body = build_email_html(scan_run_id, severity_counts, plans, concerns, scan_date)
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        scan_date = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
+
+        try:
+            pdf_bytes = build_pdf_report(scan_run_id, severity_counts, plans, concerns, scan_date,
+                                         remediation=remediation, remaining=remaining)
+        except Exception as exc:
+            # Never lose the email over the attachment
+            logger.warning("PDF report failed, sending email without it: %s", exc)
+            pdf_bytes = b""
+        html_body = build_email_html(scan_run_id, severity_counts, plans, concerns, scan_date,
+                                     remediation=remediation, remaining=remaining)
 
         critical = severity_counts.get("CRITICAL", 0)
         high     = severity_counts.get("HIGH", 0)
-        immediate_count = sum(1 for p in plans if p.get("priority") == "immediate")
-        subject = (
-            f"PPD Security Report — {scan_date} — "
-            f"{critical}C / {high}H open  |  {immediate_count} immediate action plans"
-        )
+        subject = f"PPD Security Report — {scan_date} — {critical}C / {high}H open"
+        if remediation:
+            subject += (
+                f"  |  auto-fixed {remediation.get('critical_fixed', 0)}C / "
+                f"{remediation.get('high_fixed', 0)}H"
+            )
+            if remediation.get("images_rolled_back"):
+                subject += f", {remediation['images_rolled_back']} rolled back"
 
         to_addr   = os.environ.get("SECURITY_REPORT_EMAIL", "wmatheny07@gmail.com")
         from_addr = os.environ.get("SECURITY_REPORT_FROM",  "security@peakprecisiondata.com")
@@ -322,7 +384,7 @@ def _build_graph():
 _graph = None
 
 
-async def analyze_findings(scan_run_id: int, findings: list[dict]) -> None:
+async def analyze_findings(scan_run_id: int, findings: list[dict], notify: bool = True) -> None:
     """Entry point called by scanner.py after all findings have been upserted."""
     global _graph
     if _graph is None:
@@ -334,11 +396,19 @@ async def analyze_findings(scan_run_id: int, findings: list[dict]) -> None:
         len(findings),
         len({f.get("image_name") for f in findings}),
     )
+    try:
+        remediation = get_latest_remediation(max_age_hours=12)
+    except Exception as exc:
+        logger.warning("Could not load latest remediation run: %s", exc)
+        remediation = None
+
     await _graph.ainvoke({
         "scan_run_id":      scan_run_id,
         "findings":         findings,
         "image_priorities": {},
         "top_concerns":     [],
         "action_plans":     [],
+        "remediation":      remediation,
+        "notify":           notify,
         "messages":         [],
     })

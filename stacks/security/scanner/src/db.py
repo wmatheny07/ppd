@@ -225,8 +225,8 @@ def store_action_plan(plan: dict) -> None:
                 """
                 INSERT INTO security.action_plans
                     (scan_run_id, priority, service_name, action_type,
-                     title, description, steps, estimated_effort, status, generated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'open', NOW())
+                     title, description, steps, estimated_effort, blocker, status, generated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'open', NOW())
                 """,
                 (
                     plan.get("scan_run_id"),
@@ -237,6 +237,7 @@ def store_action_plan(plan: dict) -> None:
                     plan.get("description", ""),
                     json.dumps(plan.get("steps", [])),
                     plan.get("estimated_effort"),
+                    plan.get("blocker"),
                 ),
             )
 
@@ -355,11 +356,14 @@ def get_findings_paged(
             return findings, total
 
 
-def auto_resolve_fixed_findings(scan_run_id: int, scanned_images: list[str]) -> int:
+def auto_resolve_fixed_findings(
+    scan_run_id: int, scanned_images: list[str], failed_images: list[str] | None = None,
+) -> int:
     """
-    After a completed scan, mark any previously-open finding for a scanned image
-    as 'resolved' if it wasn't touched by the current scan run (i.e., the CVE
-    is no longer present in that image).  Skips 'accepted' and 'false_positive'.
+    After a completed scan, mark any previously-open finding as 'resolved' if it
+    wasn't touched by the current scan run — either the CVE is no longer present in
+    a scanned image, or the image is no longer running at all. Findings for images
+    whose scan failed this run are left alone. Skips 'accepted' and 'false_positive'.
     Returns the count of rows resolved.
     """
     if not scanned_images:
@@ -370,11 +374,11 @@ def auto_resolve_fixed_findings(scan_run_id: int, scanned_images: list[str]) -> 
                 """
                 UPDATE security.findings
                 SET status = 'resolved', last_seen_at = NOW()
-                WHERE image_name = ANY(%s)
-                  AND scan_run_id != %s
+                WHERE scan_run_id != %s
                   AND status IN ('open', 'in_progress')
+                  AND NOT (image_name = ANY(%s))
                 """,
-                (scanned_images, scan_run_id),
+                (scan_run_id, failed_images or []),
             )
             return cur.rowcount
 
@@ -469,3 +473,148 @@ def get_distinct_images() -> list[str]:
                 WHERE status = 'open' ORDER BY image_name
             """)
             return [r[0] for r in cur.fetchall()]
+
+
+# ─── Auto-remediation ─────────────────────────────────────────────────────────
+
+_ACTION_COLS = (
+    "image_ref", "image_name", "containers", "strategy", "outcome", "reason",
+    "old_image_id", "new_image_id", "old_version", "new_version",
+    "critical_before", "high_before", "critical_after", "high_after",
+    "critical_fixed", "high_fixed", "fixed_cves", "tests", "duration_sec",
+)
+
+
+def start_remediation_run(started_at: str, status: str = "running") -> int:
+    """Called by the runner when it starts, so the scheduled scan knows to wait for it."""
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO security.remediation_runs (started_at, status) VALUES (%s, %s) RETURNING id",
+                (started_at, status),
+            )
+            return cur.fetchone()[0]
+
+
+def complete_remediation_run(run_id: int, run: dict) -> None:
+    """Persist the runner's final report: run summary + one row per image attempted."""
+    actions = run.get("actions") or []
+    deployed = [a for a in actions if a.get("outcome") == "deployed"]
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE security.remediation_runs
+                SET completed_at = %s, status = %s, images_attempted = %s, images_deployed = %s,
+                    images_rolled_back = %s, critical_fixed = %s, high_fixed = %s,
+                    health_sweep = %s, notes = %s
+                WHERE id = %s
+                """,
+                (
+                    run.get("completed_at"),
+                    run.get("status", "completed"),
+                    sum(1 for a in actions if a.get("outcome") != "skipped"),
+                    len(deployed),
+                    sum(1 for a in actions if a.get("outcome") == "rolled_back"),
+                    sum(a.get("critical_fixed") or 0 for a in deployed),
+                    sum(a.get("high_fixed") or 0 for a in deployed),
+                    json.dumps(run.get("health_sweep") or []),
+                    run.get("notes"),
+                    run_id,
+                ),
+            )
+            for a in actions:
+                vals = []
+                for col in _ACTION_COLS:
+                    v = a.get(col)
+                    if col in ("fixed_cves", "tests"):
+                        v = json.dumps(v or [])
+                    if col in ("critical_fixed", "high_fixed"):
+                        v = v or 0
+                    vals.append(v)
+                cur.execute(
+                    f"""
+                    INSERT INTO security.remediation_actions
+                        (remediation_run_id, {", ".join(_ACTION_COLS)})
+                    VALUES (%s, {", ".join(["%s"] * len(_ACTION_COLS))})
+                    """,
+                    [run_id, *vals],
+                )
+
+
+def nightly_scan_handled(hours: int = 6) -> bool:
+    """
+    True if the scheduled fallback scan should stand down: a remediation run is in
+    progress (it triggers the scan itself when done), or a full scan already ran recently.
+    """
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                  EXISTS (SELECT 1 FROM security.remediation_runs
+                          WHERE status = 'running' AND started_at > NOW() - INTERVAL '4 hours')
+                  OR EXISTS (SELECT 1 FROM security.scan_runs
+                             WHERE scan_type = 'full' AND started_at > NOW() - make_interval(hours => %s))
+                """,
+                (hours,),
+            )
+            return cur.fetchone()[0]
+
+
+def get_latest_remediation(max_age_hours: int = 12) -> dict | None:
+    """Most recent non-dry-run remediation run (with actions) within max_age_hours, else None."""
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT * FROM security.remediation_runs
+                WHERE status NOT IN ('dry_run', 'running')
+                  AND started_at > NOW() - make_interval(hours => %s)
+                ORDER BY started_at DESC LIMIT 1
+                """,
+                (max_age_hours,),
+            )
+            run = cur.fetchone()
+            if not run:
+                return None
+            run = dict(run)
+            cur.execute(
+                "SELECT * FROM security.remediation_actions WHERE remediation_run_id = %s ORDER BY id",
+                (run["id"],),
+            )
+            run["actions"] = [dict(r) for r in cur.fetchall()]
+            return run
+
+
+def get_remediation_candidates() -> list[dict]:
+    """
+    Open CRITICAL/HIGH findings with a known fix, grouped by image. The runner uses
+    this to decide which images are worth rebuilding/re-pulling.
+    """
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT image_name, image_tag,
+                       COUNT(*) FILTER (WHERE severity = 'CRITICAL') AS critical,
+                       COUNT(*) FILTER (WHERE severity = 'HIGH')     AS high
+                FROM security.findings
+                WHERE status = 'open'
+                  AND severity IN ('CRITICAL', 'HIGH')
+                  AND COALESCE(fixed_version, '') <> ''
+                GROUP BY image_name, image_tag
+                ORDER BY critical DESC, high DESC
+                """
+            )
+            return [dict(r) for r in cur.fetchall()]
+
+
+def get_open_severity_counts() -> dict:
+    """Distinct open findings by severity — what the email headline should report."""
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT severity, COUNT(*) FROM security.findings WHERE status = 'open' GROUP BY severity"
+            )
+            return {sev: n for sev, n in cur.fetchall()}

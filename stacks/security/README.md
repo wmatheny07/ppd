@@ -116,6 +116,47 @@ upstream to compare against.
 
 ---
 
+## Nightly Auto-Remediation
+
+`/opt/util/auto-remediate.py` (cron, **01:00 ET**, refuses to run outside 01:00–05:00)
+fixes what it safely can before the nightly scan, then triggers `/scan/full` so the
+email reports both what was fixed and a plan for what remains.
+
+For every running image with open CRITICAL/HIGH findings that have a known fix:
+
+1. **Refresh on the same tag** — `docker pull`, or `docker build --pull --no-cache` for
+   our own images. Tags and version pins are never changed.
+2. **Version gate** — `max_jump` per image (e.g. Metabase/MLflow/Superset/Qdrant: patch
+   only) so a floating `:latest` can't trigger an irreversible schema migration.
+   Postgres also requires an identical glibc (collation safety).
+3. **Prove it's better** — Trivy scans old vs new image with the same DB; deploys only if
+   it fixes something, adds no new CRITICAL, and lowers the CRITICAL+HIGH total.
+4. **State guard** — refuses to recreate a container holding `*.db`/sqlite files in its
+   writable layer unless listed in `preserve_paths` (MLflow's `/mlflow.db` is carried over).
+5. **Backups** — `pg_dump` / config tarballs per image into
+   `/media/nasdrive/backups/auto-remediate/<date>/` (14-day retention).
+6. **Swap** — recreates each container from its *current* config via the Docker API (no
+   compose, no 1Password access needed); old container kept stopped as
+   `<name>-autorem-prev`, old image tagged `<repo>:<tag>-autorem-prev`.
+7. **Test** — healthcheck/stability, then per-service HTTP/exec smoke tests. Any
+   failure → automatic rollback to the old container and tag.
+8. **Health sweep** — any container that was healthy before and isn't now gets one
+   restart; anything still degraded is flagged at the top of the email.
+
+Results land in `security.remediation_runs` / `security.remediation_actions`, and plans
+for remaining findings include a `blocker` (why it couldn't be automatic).
+
+| Task | Command |
+|------|---------|
+| See what would run | `python3 /opt/util/auto-remediate.py --dry-run` |
+| Also pull/build + Trivy-compare (no swap) | `... --dry-run --scan [--only <image:tag>]` |
+| Run one image now | `... --only <image:tag> --ignore-window` |
+| Per-image strategy/tests/gates | `/opt/util/auto-remediate.toml` |
+| Log | `/home/wes/crons/log/auto-remediate.log` |
+| Manual rollback after a deploy | `docker tag <repo>:<tag>-autorem-prev <repo>:<tag>`, then recreate via `stack.sh` |
+
+---
+
 ## Outputs
 
 ### Postgres — `security` schema

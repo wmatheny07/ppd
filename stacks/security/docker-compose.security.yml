@@ -36,7 +36,9 @@ services:
       - SECURITY_REPORT_EMAIL=${SECURITY_REPORT_EMAIL:-wmatheny07@gmail.com}
       - SECURITY_REPORT_FROM=${SECURITY_REPORT_FROM:-security@peakprecisiondata.com}
       # Scan schedules (cron format, America/New_York)
-      - SCAN_SCHEDULE_CRON=0 2 * * *      # daily full scan at 2am
+      # Fallback only: /opt/util/auto-remediate.py (cron 01:00) triggers the nightly scan+email
+      # when it finishes; this scheduled run stands down if that already happened.
+      - SCAN_SCHEDULE_CRON=0 2 * * *
       - VERSION_CHECK_SCHEDULE_CRON=0 3 * * 1  # version drift Mondays at 3am
       - LOG_LEVEL=INFO
     volumes:

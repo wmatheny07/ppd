@@ -101,3 +101,50 @@ CREATE TABLE IF NOT EXISTS security.action_plans (
 
 CREATE INDEX IF NOT EXISTS idx_action_plans_priority ON security.action_plans (priority, status);
 CREATE INDEX IF NOT EXISTS idx_action_plans_scan     ON security.action_plans (scan_run_id);
+
+-- ─── Auto-remediation ─────────────────────────────────────────────────────────
+-- Written by the host-side runner (/opt/util/auto-remediate.py) via POST
+-- /internal/remediation-runs. One run per night, one action per image attempted.
+CREATE TABLE IF NOT EXISTS security.remediation_runs (
+    id               SERIAL PRIMARY KEY,
+    started_at       TIMESTAMPTZ NOT NULL,
+    completed_at     TIMESTAMPTZ,
+    status           VARCHAR(20) NOT NULL,   -- 'completed' | 'partial' | 'failed' | 'dry_run'
+    images_attempted INT NOT NULL DEFAULT 0,
+    images_deployed  INT NOT NULL DEFAULT 0,
+    images_rolled_back INT NOT NULL DEFAULT 0,
+    critical_fixed   INT NOT NULL DEFAULT 0,
+    high_fixed       INT NOT NULL DEFAULT 0,
+    health_sweep     JSONB,                  -- containers unhealthy after the run, if any
+    notes            TEXT
+);
+
+CREATE TABLE IF NOT EXISTS security.remediation_actions (
+    id                 SERIAL PRIMARY KEY,
+    remediation_run_id INT NOT NULL REFERENCES security.remediation_runs(id) ON DELETE CASCADE,
+    image_ref          VARCHAR(600) NOT NULL,
+    image_name         VARCHAR(500) NOT NULL,
+    containers         TEXT[],
+    strategy           VARCHAR(20),          -- 'pull' | 'build' | 'skip'
+    -- 'deployed' | 'rolled_back' | 'rejected' | 'no_update' | 'skipped' | 'failed'
+    outcome            VARCHAR(20) NOT NULL,
+    reason             TEXT,
+    old_image_id       VARCHAR(80),
+    new_image_id       VARCHAR(80),
+    old_version        VARCHAR(200),
+    new_version        VARCHAR(200),
+    critical_before    INT, high_before INT,
+    critical_after     INT, high_after  INT,
+    critical_fixed     INT NOT NULL DEFAULT 0,
+    high_fixed         INT NOT NULL DEFAULT 0,
+    fixed_cves         JSONB,                -- [{"cve","package","severity"}]
+    tests              JSONB,                -- [{"name","ok","detail"}]
+    duration_sec       INT,
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_remediation_actions_run ON security.remediation_actions (remediation_run_id);
+
+-- Why a plan's findings could not be fixed automatically (set when the plan was
+-- generated after an auto-remediation run).
+ALTER TABLE security.action_plans ADD COLUMN IF NOT EXISTS blocker TEXT;
