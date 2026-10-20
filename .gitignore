@@ -63,3 +63,5 @@ stacks/dagster/dagster_home/.nux/
 **/edr_target/
 # Separate git repo (cloned upstream project)
 apps/Public-ESPN-API/
+# Jupyter/desktop trash folders (root-owned, unreadable)
+.Trash-*/
