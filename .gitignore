@@ -61,3 +61,5 @@ stacks/dagster/dagster_home/.nux/
 
 # elementary (edr)
 **/edr_target/
+# Separate git repo (cloned upstream project)
+apps/Public-ESPN-API/
