@@ -47,6 +47,14 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       # CVE suppression list — mounted read-only so it can be updated without rebuilding
       - ./scanner/trivyignore:/app/trivyignore:ro
+      # Trivy vulnerability DB cache (~1 GB) — on a volume so the container can be
+      # swapped by auto-remediation without losing it
+      - trivy-cache:/root/.cache/trivy
+    # Rotate logs — an unbounded json log made `docker logs` unreadable past June
+    logging:
+      options:
+        max-size: "50m"
+        max-file: "3"
     ports:
       - "18100:8000"
     networks:
@@ -85,3 +93,6 @@ services:
 networks:
   core_data_net:
     external: true
+
+volumes:
+  trivy-cache:

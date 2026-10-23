@@ -6,6 +6,8 @@ dagster-dbt
 
 # --- Database ---
 psycopg2-binary
+# SQLAlchemy >= 2.1 maps postgresql:// to psycopg (v3) by default
+psycopg[binary]
 
 # --- HTTP / data ---
 requests
