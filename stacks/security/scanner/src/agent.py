@@ -62,6 +62,11 @@ Return only valid JSON with no markdown code fences.\
 """
 
 
+def _response_text(response) -> str:
+    """Join the text blocks of a Messages response (newer models may lead with a thinking block)."""
+    return "".join(b.text for b in response.content if getattr(b, "type", None) == "text")
+
+
 def _parse_json(text: str, context: str) -> dict | None:
     """
     Parse JSON from a Claude response, stripping markdown fences if present.
@@ -144,7 +149,7 @@ Return JSON only, no markdown:
         messages=[{"role": "user", "content": prompt}],
     )
 
-    parsed = _parse_json(response.content[0].text, "triage_node")
+    parsed = _parse_json(_response_text(response), "triage_node")
     if not parsed:
         # Fall back to severity-based priorities so plans still get generated
         logger.warning("Triage unparseable — using severity-based priorities")
@@ -258,12 +263,12 @@ Return JSON only, no markdown:
 
             response = _client.messages.create(
                 model=_MODEL,
-                max_tokens=1024,
+                max_tokens=4096,
                 system=_STACK_CONTEXT,
                 messages=[{"role": "user", "content": prompt}],
             )
 
-            parsed = _parse_json(response.content[0].text, f"plan_node/{priority_label}/{image}")
+            parsed = _parse_json(_response_text(response), f"plan_node/{priority_label}/{image}")
             if parsed:
                 parsed.update({
                     "priority":     priority_label,
