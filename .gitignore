@@ -65,3 +65,6 @@ stacks/dagster/dagster_home/.nux/
 apps/Public-ESPN-API/
 # Jupyter/desktop trash folders (root-owned, unreadable)
 .Trash-*/
+
+# Superset celery beat runtime state
+stacks/core/superset_home/celerybeat-schedule
