@@ -6,8 +6,8 @@ dagster-dbt
 
 # --- Database ---
 psycopg2-binary
-# SQLAlchemy >= 2.1 maps postgresql:// to psycopg (v3) by default
-psycopg[binary]
+# dagster-postgres needs psycopg2; SQLAlchemy 2.1 defaults postgresql:// to psycopg3, which breaks NOTIFY
+SQLAlchemy<2.1
 
 # --- HTTP / data ---
 requests
