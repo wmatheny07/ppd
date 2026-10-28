@@ -30,9 +30,11 @@ as
 	(
 		select
 			*
-			, CASE WHEN ROW_NUMBER() OVER (PARTITION BY person, "date" ORDER BY extracted_at DESC) = 1 THEN TRUE ELSE FALSE END AS is_latest
+			, CASE WHEN ROW_NUMBER() OVER (PARTITION BY person, "date" ORDER BY extracted_at) = 1 THEN TRUE ELSE FALSE END AS is_latest
 		from 
 			raw_metrics
+		where
+			metric_name = 'sleep_analysis'
 	)
 	where is_latest = true
 )
@@ -59,7 +61,7 @@ SELECT
 FROM
     unique_metrics
 WHERE
-    metric_name = 'sleep_analysis'
+    1=1
     {% if is_incremental() %}
         AND {{ dbt_utils.generate_surrogate_key([
             'date',
