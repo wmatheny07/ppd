@@ -1,5 +1,5 @@
 """
-Health data pipeline job: airbyte_sync -> dbt_deps -> dbt_build -> [dbt_docs, edr_report]
+Health data pipeline job: load_health_raw_files -> dbt_deps -> dbt_build -> [dbt_docs, edr_report]
 
 Equivalent to Airflow DAG: health_data_pipeline (schedule: hourly 8am-10pm ET)
 
@@ -30,6 +30,8 @@ from dagster import (
     job,
     op,
 )
+
+from .health_raw_load import load_health_raw_files
 
 AIRBYTE_CONNECTION_ID = "8e8d970b-4d1c-4e36-96c7-394865abace7"
 DBT_PROJECT_DIR = "/opt/dagster/dbt/health"
@@ -321,7 +323,7 @@ def dbt_docs_generate(context):
     hooks={health_pipeline_failure_alert},
 )
 def health_pipeline_job():
-    synced = trigger_airbyte_sync()
+    synced = load_health_raw_files()
     deps_done = dbt_deps_health(synced)
     promoted = promote_freshness_state(deps_done)
     fresh = dbt_source_freshness(promoted)

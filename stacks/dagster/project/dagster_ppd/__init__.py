@@ -6,6 +6,7 @@ from .assets.weather_dbt import weather_dbt_assets
 from .assets.mail import raw_mail_documents, enriched_mail_documents, bank_statement_transactions, mail_dbt_assets, mail_scan_sensor
 from .jobs.espn_ingest import espn_ingest_job
 from .jobs.health_pipeline import health_pipeline_job
+from .jobs.health_raw_load import HEALTH_BUCKET
 from .jobs.mail_pipeline import mail_dbt_job, mail_pipeline_job
 from .jobs.nfl_dfs_ingest import nfl_dfs_ingest_job
 from .jobs.security_scan import security_image_scan_job, security_version_check_job
@@ -65,6 +66,7 @@ defs = Definitions(
     resources={
         "health_dbt": _health_dbt,
         "minio": MinIOResource(),
+        "health_minio": MinIOResource(bucket=HEALTH_BUCKET),
         "postgres": PostgresResource(),
         "anthropic": AnthropicResource(),
     },
