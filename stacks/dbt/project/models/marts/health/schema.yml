@@ -266,7 +266,7 @@ models:
   description: "Incremental mart of daily resting heart rate readings per person, sourced from Apple Watch overnight measurements via vw_resting_hr_metrics."
   columns:
   - name: id
-    description: "Surrogate key derived from MD5 of record_date, person, and resting_heart_rate."
+    description: "Surrogate key derived from MD5 of the record date and person, so a re-export replaces the earlier value."
     tests: 
       - not_null
       - unique

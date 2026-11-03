@@ -6,13 +6,13 @@
 ) -}}
 
 SELECT
-    hr.record_date
+    hr.record_date::date AS record_date
     , hr.person
     , hr.resting_heart_rate
     , hrv.overnight_avg_hrv
 FROM {{ ref('fct_resting_hr') }} AS hr
 JOIN {{ ref('fct_hrv_daily') }} AS hrv
-    ON hr.record_date = hrv.record_date
+    ON hr.record_date::date = hrv.record_date
     AND hr.person = hrv.person
 WHERE overnight_avg_hrv IS NOT NULL
 {% if is_incremental() %}

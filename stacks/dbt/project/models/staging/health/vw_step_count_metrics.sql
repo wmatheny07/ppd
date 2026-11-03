@@ -6,27 +6,59 @@
 
 WITH raw_metrics AS (
 
-    SELECT DISTINCT
-        JSONB_ARRAY_ELEMENTS(JSONB_ARRAY_ELEMENTS(data -> 'metrics') -> 'data') ->> 'date' AS "date"
+    SELECT
+        reading ->> 'date' AS "date"
         , SPLIT_PART(_ab_source_file_url, '/', 3) AS person
-        , JSONB_ARRAY_ELEMENTS(JSONB_ARRAY_ELEMENTS(data -> 'metrics') -> 'data') ->> 'qty' AS qty
-        , JSONB_ARRAY_ELEMENTS(JSONB_ARRAY_ELEMENTS(data -> 'metrics') -> 'data') ->> 'source' AS data_source
-        , JSONB_ARRAY_ELEMENTS(data -> 'metrics') ->> 'name' AS metric_name
+        , reading ->> 'qty' AS qty
+        , reading ->> 'source' AS data_source
+        , metric ->> 'name' AS metric_name
+        , _ab_source_file_last_modified AS file_last_modified
     FROM
-        {{ source('health', 'metrics') }}
+        {{ source('health', 'metrics') }},
+        LATERAL JSONB_ARRAY_ELEMENTS(data -> 'metrics') AS metric,
+        LATERAL JSONB_ARRAY_ELEMENTS(metric -> 'data') AS reading
+    WHERE
+        metric ->> 'name' = 'step_count'
+
+)
+
+, latest_per_minute AS (
+
+    -- Exports hold one row per minute. Re-exports of the same minute can shift the
+    -- seconds or blank the source, so keep the row from the newest file. Truncating
+    -- with the offset keeps both 1am hours on the night the clocks go back.
+    SELECT DISTINCT ON (person, DATE_TRUNC('minute', "date"::TIMESTAMPTZ))
+        DATE_TRUNC('minute', "date"::TIMESTAMP) AS record_date
+        , person
+        , qty
+        , data_source
+        , metric_name
+    FROM
+        raw_metrics
+    ORDER BY
+        person
+        , DATE_TRUNC('minute', "date"::TIMESTAMPTZ)
+        , file_last_modified DESC
 
 )
 
 SELECT
-    "date"::TIMESTAMP AS record_date
-    , person
-    , qty::FLOAT AS step_count
-    , data_source
-    , metric_name
+    latest_per_minute.record_date
+    , latest_per_minute.person
+    , latest_per_minute.qty::FLOAT AS step_count
+    , latest_per_minute.data_source
+    , latest_per_minute.metric_name
 FROM
-    raw_metrics
+    latest_per_minute
+{%- if is_incremental() %}
+LEFT JOIN (
+    SELECT person, MAX(record_date) AS max_record_date
+    FROM {{ this }}
+    GROUP BY person
+) AS watermark
+    ON watermark.person = latest_per_minute.person
 WHERE
-    metric_name = 'step_count'
-    {%- if is_incremental() %}
-        AND "date"::TIMESTAMP > (SELECT MAX(record_date::TIMESTAMP) FROM {{ this }})
-    {% endif %}
+    -- Per person, because exports arrive at different times. The lookback picks up late files.
+    watermark.max_record_date IS NULL
+    OR latest_per_minute.record_date > watermark.max_record_date - INTERVAL '7 days'
+{% endif %}

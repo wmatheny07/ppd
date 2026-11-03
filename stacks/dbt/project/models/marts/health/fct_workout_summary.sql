@@ -49,7 +49,19 @@ WITH deduped_workouts AS (
     LEFT JOIN {{ ref('fct_workout_time_adj') }} AS wta
         ON vw.id = wta.id
         AND wta.updated_end_date IS NOT NULL
-    LEFT JOIN {{ ref('fct_active_energy_summary') }} AS ves
+    LEFT JOIN (
+        -- The summary has one row per reading, so total them per workout.
+        SELECT
+            workout_id
+            , SUM(total_calories) AS total_calories
+            , COALESCE(
+                MAX(data_source) FILTER (WHERE LOWER(data_source) LIKE '%ifit%')
+                , MAX(NULLIF(data_source, ''))
+                , ''
+            ) AS data_source
+        FROM {{ ref('fct_active_energy_summary') }}
+        GROUP BY workout_id
+    ) AS ves
         ON vw.id = ves.workout_id
     WHERE
         {% if is_incremental() %}

@@ -5,7 +5,7 @@
 ) }}
 
 SELECT
-    MD5(CONCAT(record_date, person, resting_heart_rate)) AS id
+    MD5(CONCAT(record_date::date, person)) AS id
     , record_date
     , person
     , resting_heart_rate

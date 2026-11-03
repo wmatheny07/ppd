@@ -4,10 +4,14 @@
     incremental_strategy='delete+insert'
 ) }}
 
-WITH constants AS (
+WITH birth_dates AS (
 
-    SELECT
-        DATE('12/29/1983') AS birth_date
+    SELECT *
+    FROM (
+        VALUES
+            ('wes', DATE '1983-12-29')
+            , ('amanda', DATE '1989-03-12')
+    ) AS people (person, birth_date)
 
 )
 
@@ -15,7 +19,10 @@ WITH constants AS (
 
     SELECT
         date
+        , vhrd."date"::timestamp AS reading_ts
         , vhrd.person
+        , vws.id AS workout_id
+        , vws.workout_end
         , vws.workout_type
         , ROUND(avg::numeric, 2) AS hr
         , EXTRACT(
@@ -23,10 +30,12 @@ WITH constants AS (
         ) AS age_at_reading
     FROM {{ ref('vw_heart_rate_data') }} AS vhrd
     JOIN {{ ref('fct_workout_summary') }} AS vws
-        ON vhrd."date"::timestamp
+        ON vhrd.person = vws.person
+        AND vhrd."date"::timestamp
             BETWEEN DATE_TRUNC('minute', workout_start::timestamp)
             AND workout_end::timestamp
-    CROSS JOIN constants
+    JOIN birth_dates
+        ON vhrd.person = birth_dates.person
     {% if is_incremental() %}
     WHERE vhrd."date"::date > (SELECT MAX(record_date::date) FROM {{ this }})
         OR vhrd."date"::date > current_date - INTERVAL '30 day'
@@ -51,17 +60,16 @@ WITH constants AS (
             WHEN hr >= (220 - age_at_reading) * 0.9 THEN 'Peak'
             ELSE 'Unknown'
         END AS hr_zone
-        , DATE_PART(
-            'minute',
-            LEAD("date"::timestamp) OVER (
-                ORDER BY "date"
-            ) - "date"::timestamp
-        )::decimal(10, 3) + DATE_PART(
-            'seconds',
-            LEAD("date"::timestamp) OVER (
-                ORDER BY "date"
-            ) - "date"::timestamp
-        )::decimal(10, 3) / 60 AS duration_at_reading
+        -- Each reading lasts until the next one in the same workout; the last until it ends.
+        , (
+            EXTRACT(EPOCH FROM COALESCE(
+                LEAD(reading_ts) OVER (
+                    PARTITION BY person, workout_id
+                    ORDER BY reading_ts
+                ),
+                workout_end
+            ) - reading_ts) / 60
+        )::decimal(10, 3) AS duration_at_reading
     FROM base_data
 
 )

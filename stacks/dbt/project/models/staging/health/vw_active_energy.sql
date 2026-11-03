@@ -15,10 +15,33 @@ WITH raw_energy AS (
         , energy_entry ->> 'date' AS date
         , energy_entry ->> 'units' AS units
         , energy_entry ->> 'source' AS data_source
+        , w._ab_source_file_last_modified AS file_last_modified
     FROM
         {{ source('health', 'Workouts') }} AS w,
         LATERAL JSONB_ARRAY_ELEMENTS(w.data -> 'workouts') AS workout,
         LATERAL JSONB_ARRAY_ELEMENTS(workout -> 'activeEnergy') AS energy_entry
+
+)
+
+, latest_per_reading AS (
+
+    -- The same workout can appear in several exports. Keep the row from the newest file,
+    -- preferring one with a source because newer exports can leave it blank.
+    SELECT DISTINCT ON (id, person, date)
+        id
+        , person
+        , qty
+        , date
+        , units
+        , data_source
+    FROM
+        raw_energy
+    ORDER BY
+        id
+        , person
+        , date
+        , (COALESCE(data_source, '') <> '') DESC
+        , file_last_modified DESC
 
 )
 
@@ -42,39 +65,47 @@ WITH raw_energy AS (
             ELSE NULL
         END AS mv_avg
     FROM
-        raw_energy
+        latest_per_reading
 
 )
 
 SELECT
     {{ dbt_utils.generate_surrogate_key([
-        'id',
-        'person',
-        'date'
+        'with_moving_avg.id',
+        'with_moving_avg.person',
+        'with_moving_avg.date'
     ]) }} AS id
     , with_moving_avg.id AS workout_id
-    , person
-    , data_source
-    , qty
-    , date
+    , with_moving_avg.person
+    , with_moving_avg.data_source
+    , with_moving_avg.qty
+    , with_moving_avg.date
     , CASE
         WHEN LAG(mv_avg) OVER (
-            PARTITION BY id
-            ORDER BY date
+            PARTITION BY with_moving_avg.id
+            ORDER BY with_moving_avg.date
         ) IS NOT NULL THEN (
             LAG(mv_avg) OVER (
-                PARTITION BY id
-                ORDER BY date
+                PARTITION BY with_moving_avg.id
+                ORDER BY with_moving_avg.date
             ) - mv_avg
         ) / NULLIF(LAG(mv_avg) OVER (
-            PARTITION BY id
-            ORDER BY date
+            PARTITION BY with_moving_avg.id
+            ORDER BY with_moving_avg.date
         ), 0)
         ELSE NULL
     END AS perc_diff_prev
 FROM
     with_moving_avg
 {%- if is_incremental() %}
+LEFT JOIN (
+    SELECT person, MAX(date::TIMESTAMP) AS max_date
+    FROM {{ this }}
+    GROUP BY person
+) AS watermark
+    ON watermark.person = with_moving_avg.person
 WHERE
-    date::TIMESTAMP > (SELECT MAX(date::TIMESTAMP) FROM {{ this }})
+    -- Per person, because exports arrive at different times. The lookback picks up late files.
+    watermark.max_date IS NULL
+    OR with_moving_avg.date::TIMESTAMP > watermark.max_date - INTERVAL '7 days'
 {% endif %}
