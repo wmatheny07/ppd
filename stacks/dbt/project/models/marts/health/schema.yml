@@ -21,11 +21,11 @@ models:
   - name: start_nearest_30min
     description: "Workout start time rounded to the nearest 30-minute mark, used for joining with other time-series data."
   - name: workout_end
-    description: "Timestamp when the workout session ended. Uses adjusted end time from fct_workout_time_adj if available."
+    description: "Timestamp when the workout session ended."
   - name: total_calories
     description: "Total kilocalories burned during the workout. Uses iFIT calories when data source is iFIT."
   - name: duration_mins
-    description: "Total workout duration in minutes. Uses adjusted duration when fct_workout_time_adj has a correction."
+    description: "Total workout duration in minutes."
     tests:
       - dbt_utils.accepted_range:
           arguments:
@@ -249,20 +249,6 @@ models:
           arguments:
             min_value: 1
             max_value: 300
-
-- name: fct_workout_time_adj
-  description: "Incremental mart of time-adjusted workout records, filtering outlier sessions based on heart rate percent difference from prior sessions."
-  columns:
-  - name: id
-    description: "Workout session identifier."
-  - name: person
-    description: "Person identifier."
-  - name: start_date
-    description: "Earliest active energy interval date for this workout session."
-  - name: end_date
-    description: "Latest active energy interval date for this workout session."
-  - name: updated_end_date
-    description: "Corrected end date derived from the interval where the moving average percent difference exceeds 15%, indicating the true workout end."
 
 - name: fct_resting_hr
   description: "Incremental mart of daily resting heart rate readings per person, sourced from Apple Watch overnight measurements via vw_resting_hr_metrics."

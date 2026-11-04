@@ -49,7 +49,6 @@ Mart models build analytical facts on top of these views:
 
 - **`fct_workout_summary`** — deduplicated, source-prioritized workout records with reclassification logic (e.g., low-intensity runs recategorized as hiking) and iFIT calorie override
 - **`fct_active_energy_summary`** — per-session active calorie totals with start/end timestamps
-- **`fct_workout_time_adj`** — corrects workout end times for sessions with anomalous calorie burn curves
 - **`fct_sleep_metrics`** — nightly sleep stage breakdown per person
 - **`fct_dim_sleep`** — unpivoted sleep stages (one row per stage per night) for dimensional analysis
 - **`fct_sleep_calories`** — joins nightly sleep data with same-day calorie burn

@@ -68,7 +68,6 @@ flowchart TD
     subgraph mart_h["Health"]
       FCT_WS[fct_workout_summary]
       FCT_AES[fct_active_energy_summary]
-      FCT_WTA[fct_workout_time_adj]
       FCT_SM[fct_sleep_metrics]
       FCT_DS[fct_dim_sleep]
       FCT_SC[fct_sleep_calories]
@@ -117,11 +116,9 @@ flowchart TD
 
   STG_AEB --> FCT_AES
   STG_AE  --> FCT_AES
-  STG_AE  --> FCT_WTA
 
   STG_WKT --> FCT_WS
   FCT_AES --> FCT_WS
-  FCT_WTA --> FCT_WS
 
   STG_SLP --> FCT_SM
   STG_SLP --> FCT_DS
@@ -150,5 +147,5 @@ flowchart TD
   class STG_WX,STG_AQ,STG_WKT,STG_AE,STG_AEB,STG_SLP,STG_HR,STG_RHR,STG_HRV,STG_HRR,STG_AEM,STG_BEM,STG_DM,STG_PEM,STG_RT,STG_SCM,STG_WAD,STG_WSM,STG_WST staging
   class STG_EP,STG_EPS,STG_ETS disabled
   class INT_HC,INT_AQC intermed
-  class MRT_DWS,MRT_LC,MRT_HA,FCT_WS,FCT_AES,FCT_WTA,FCT_SM,FCT_DS,FCT_SC,FCT_HZ,FCT_RHR mart
+  class MRT_DWS,MRT_LC,MRT_HA,FCT_WS,FCT_AES,FCT_SM,FCT_DS,FCT_SC,FCT_HZ,FCT_RHR mart
   class FCT_EP,FCT_EPS,FCT_ETS disabled
