@@ -11,7 +11,7 @@ SELECT
     , resting_heart_rate
 FROM {{ ref('vw_resting_hr_metrics') }}
 {%- if is_incremental() %}
-WHERE record_date::date > (SELECT MAX(record_date::date) FROM {{ this }})
+WHERE record_date::date > {{ earliest_person_watermark('record_date::date') }}
     OR record_date::date > current_date - INTERVAL '30 day'
     -- reprocess last 30 days to capture updates
 {%- endif %}

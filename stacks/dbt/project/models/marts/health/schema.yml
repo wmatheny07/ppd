@@ -1,6 +1,10 @@
 models:
 - name: fct_workout_summary
   description: "Mart table summarizing completed workout sessions per person, including duration, distance, and calories burned per minute."
+  tests:
+    - dbt_utils.unique_combination_of_columns:
+        arguments:
+          combination_of_columns: [id]
   columns:
   - name: id
     description: "Unique workout session identifier from Apple Health."
@@ -42,6 +46,10 @@ models:
 
 - name: fct_hr_zones
   description: "Incremental mart classifying workout heart rate data into training zones (Recovery, Fat Burn, Cardio, Threshold, Peak) based on age-adjusted max HR."
+  tests:
+    - dbt_utils.unique_combination_of_columns:
+        arguments:
+          combination_of_columns: [record_date, person, workout_type, hr_zone]
   columns:
   - name: record_date
     description: "Date of the heart rate zone record."
@@ -69,6 +77,10 @@ models:
 
 - name: fct_dim_sleep
   description: "Incremental mart breaking nightly sleep into dimensional rows by sleep type (REM, core, deep, awake) per person and date."
+  tests:
+    - dbt_utils.unique_combination_of_columns:
+        arguments:
+          combination_of_columns: [record_date, person, sleep_type]
   columns:
   - name: record_date
     description: "Date of the sleep record."
@@ -86,16 +98,20 @@ models:
           arguments:
             values: [ 'rem', 'core', 'deep', 'awake', 'asleep' ]
   - name: sleep_duration
-    description: "Duration of this sleep stage in minutes."
+    description: "Duration of this sleep stage in hours."
     tests:
       - dbt_utils.accepted_range:
           arguments:
             min_value: 0
   - name: total_sleep
-    description: "Total sleep duration for the night in minutes (all stages combined)."
+    description: "Total sleep duration for the night in hours (all stages combined)."
 
 - name: fct_sleep_metrics
   description: "Incremental mart of nightly sleep metrics per person, including total sleep duration and breakdown by REM, core, deep, and awake stages."
+  tests:
+    - dbt_utils.unique_combination_of_columns:
+        arguments:
+          combination_of_columns: [record_date, person]
   columns:
   - name: record_date
     description: "Date of the sleep record."
@@ -106,13 +122,13 @@ models:
     tests: 
       - not_null
   - name: rem
-    description: "Duration of REM sleep in minutes."
+    description: "Duration of REM sleep in hours."
   - name: core
-    description: "Duration of core (light) sleep in minutes."
+    description: "Duration of core (light) sleep in hours."
   - name: deep
-    description: "Duration of deep sleep in minutes."
+    description: "Duration of deep sleep in hours."
   - name: awake
-    description: "Duration of time awake during the sleep window in minutes."
+    description: "Duration of time awake during the sleep window in hours."
   - name: asleep
     description: "Hours of sleep with no stage detail, such as AutoSleep rows or some naps."
   - name: in_bed_start
@@ -132,6 +148,10 @@ models:
 
 - name: fct_sleep_calories
   description: "Incremental mart joining nightly sleep metrics with same-day calorie burn totals, enabling analysis of the relationship between sleep quality and energy expenditure."
+  tests:
+    - dbt_utils.unique_combination_of_columns:
+        arguments:
+          combination_of_columns: [record_date, person]
   columns:
   - name: record_date
     description: "Date of the sleep and calorie record."
@@ -142,13 +162,13 @@ models:
     tests: 
       - not_null
   - name: total_sleep
-    description: "Total sleep duration in minutes for the night."
+    description: "Total sleep duration in hours for the night."
     tests:
     - dbt_utils.accepted_range:
         arguments:
           min_value: 0
   - name: awake
-    description: "Duration of time awake during the sleep window in minutes."
+    description: "Duration of time awake during the sleep window in hours."
     tests:
     - dbt_utils.accepted_range:
         arguments:
@@ -162,6 +182,10 @@ models:
 
 - name: fct_active_energy_summary
   description: "Incremental mart aggregating active calorie burn per workout session per person, with start/end timestamps and total calories by data source."
+  tests:
+    - dbt_utils.unique_combination_of_columns:
+        arguments:
+          combination_of_columns: [id]
   columns:
   - name: id
     description: "Workout session identifier."
@@ -224,6 +248,10 @@ models:
 
 - name: fct_hrv_resting_hr
   description: "Incremental mart joining daily resting heart rate and overnight HRV per person, limited to days where both signals are present. Intended for scatter plot and correlation analysis — both metrics are derived from the sleep window, making them directly comparable as paired recovery indicators."
+  tests:
+    - dbt_utils.unique_combination_of_columns:
+        arguments:
+          combination_of_columns: [record_date, person]
   columns:
   - name: record_date
     description: "Date of the record."
@@ -277,6 +305,10 @@ models:
 
 - name: fct_step_count_summary
   description: "Incremental mart aggregating daily step counts per person. Multiple records per day from different sources are summed. Only days with step_count > 0 are included."
+  tests:
+    - dbt_utils.unique_combination_of_columns:
+        arguments:
+          combination_of_columns: [record_date, person]
   columns:
   - name: record_date
     description: "Date of the step count record."
@@ -295,6 +327,10 @@ models:
 
 - name: fct_time_in_daylight_summary
   description: "Incremental mart aggregating daily time spent in daylight per person. Multiple records per day are summed. Only days with time_in_daylight > 0 are included."
+  tests:
+    - dbt_utils.unique_combination_of_columns:
+        arguments:
+          combination_of_columns: [record_date, person]
   columns:
   - name: record_date
     description: "Date of the daylight record."
@@ -323,13 +359,13 @@ models:
     tests: 
       - not_null
   - name: total_sleep
-    description: "Total sleep duration in minutes for the night."
+    description: "Total sleep duration in hours for the night."
     tests:
     - dbt_utils.accepted_range:
         arguments:
           min_value: 0
   - name: awake
-    description: "Duration of time awake during the sleep window in minutes."
+    description: "Duration of time awake during the sleep window in hours."
     tests:
       - dbt_utils.accepted_range:
           arguments:

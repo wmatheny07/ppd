@@ -19,7 +19,7 @@ WITH hrv_raw AS (
     WHERE heart_rate_variability BETWEEN 1 AND 300
     {% if is_incremental() %}
         AND (
-            record_date::date > (SELECT MAX(record_date) FROM {{ this }})
+            record_date::date > {{ earliest_person_watermark('record_date') }}
             OR record_date::date > current_date - INTERVAL '30 day'
         )
         -- reprocess last 30 days to capture updates

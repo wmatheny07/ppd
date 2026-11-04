@@ -26,7 +26,7 @@ LEFT JOIN cals_burned
     ON vsm.record_date = cals_burned.record_date
     AND vsm.person = cals_burned.person
 {%- if is_incremental() %}
-WHERE vsm.record_date::date > (SELECT MAX(record_date::date) FROM {{ this }})
+WHERE vsm.record_date::date > {{ earliest_person_watermark('record_date::date') }}
     OR vsm.record_date::date > current_date - INTERVAL '30 day'
     -- reprocess last 30 days to capture updates
 {%- endif %}

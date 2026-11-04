@@ -17,7 +17,7 @@ JOIN {{ ref('fct_hrv_daily') }} AS hrv
 WHERE overnight_avg_hrv IS NOT NULL
 {% if is_incremental() %}
     AND (
-        hr.record_date::date > (SELECT MAX(record_date::date) FROM {{ this }})
+        hr.record_date::date > {{ earliest_person_watermark('record_date::date') }}
         OR hr.record_date::date > current_date - INTERVAL '30 day'
     )
     -- reprocess last 30 days to capture updates

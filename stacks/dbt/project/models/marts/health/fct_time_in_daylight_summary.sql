@@ -13,7 +13,7 @@ FROM {{ ref('vw_time_in_daylight') }}
 WHERE time_in_daylight > 0
 {% if is_incremental() %}
     AND (
-        record_date::date >= (SELECT MAX(record_date::date) FROM {{ this }})
+        record_date::date >= {{ earliest_person_watermark('record_date::date') }}
         OR record_date::date > current_date - INTERVAL '30 day'
     )
     -- reprocess last 30 days to capture updates

@@ -24,7 +24,7 @@ SELECT
     , total_sleep
 FROM {{ ref('vw_sleep_metrics') }}
 {% if is_incremental() %}
-WHERE record_date::timestamp > (SELECT MAX(record_date::timestamp) FROM {{ this }})
+WHERE record_date::timestamp > {{ earliest_person_watermark('record_date::timestamp') }}
     OR record_date::date > current_date - INTERVAL '30 day'
     -- reprocess last 30 days to capture updates
 {% endif %}

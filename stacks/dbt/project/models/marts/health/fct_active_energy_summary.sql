@@ -1,6 +1,6 @@
 {{ config(
     materialized='incremental',
-    unique_key=['id', 'person', 'data_source'],
+    unique_key=['id', 'person'],
     incremental_strategy='delete+insert'
 ) }}
 
@@ -14,7 +14,7 @@ SELECT
     , ROUND(SUM(qty::decimal(10, 3)), 2) AS total_calories
 FROM {{ ref('vw_active_energy') }}
 {% if is_incremental() %}
-WHERE date::timestamp > (SELECT MAX(end_time::timestamp) FROM {{ this }})
+WHERE date::timestamp > {{ earliest_person_watermark('end_time::timestamp') }}
     OR date::date > current_date - INTERVAL '30 day'
     -- reprocess last 30 days to capture updates
 {% endif %}

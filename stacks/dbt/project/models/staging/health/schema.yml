@@ -3,6 +3,10 @@ version: 2
 models:
   - name: vw_workouts
     description: "Staging view of workout sessions extracted from Apple Health JSON, including workout type, duration, and per-person attribution."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [id]
     columns:
       - name: id
         description: "Unique identifier for the workout session from Apple Health."
@@ -33,6 +37,10 @@ models:
 
   - name: vw_heart_rate_data
     description: "Staging view of heart rate samples by date and person, sourced from Apple Health metrics data."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [id]
     columns:
       - name: date
         description: "Timestamp of the heart rate reading."
@@ -115,6 +123,10 @@ models:
 
   - name: vw_sleep_metrics
     description: "Staging view of nightly sleep metrics including REM, core, deep, and awake durations per person from Apple Health."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [record_date, person]
     columns:
       - name: record_date
         description: "Date of the sleep record."
@@ -125,13 +137,13 @@ models:
         tests:
           - not_null
       - name: rem
-        description: "Duration of REM sleep in minutes."
+        description: "Duration of REM sleep in hours."
       - name: core
-        description: "Duration of core (light) sleep in minutes."
+        description: "Duration of core (light) sleep in hours."
       - name: deep
-        description: "Duration of deep sleep in minutes."
+        description: "Duration of deep sleep in hours."
       - name: awake
-        description: "Duration of time awake during the sleep session in minutes."
+        description: "Duration of time awake during the sleep session in hours."
       - name: asleep
         description: "Hours of sleep with no stage detail, such as AutoSleep rows or some naps."
       - name: in_bed_start
@@ -152,6 +164,10 @@ models:
 
   - name: vw_active_energy
     description: "Staging view of active energy burn records at the interval level, used for aggregation into energy summary marts."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [id]
     columns:
       - name: id
         description: "Workout session identifier this energy interval belongs to."

@@ -37,7 +37,7 @@ WITH birth_dates AS (
     JOIN birth_dates
         ON vhrd.person = birth_dates.person
     {% if is_incremental() %}
-    WHERE vhrd."date"::date > (SELECT MAX(record_date::date) FROM {{ this }})
+    WHERE vhrd."date"::date > {{ earliest_person_watermark('record_date::date') }}
         OR vhrd."date"::date > current_date - INTERVAL '30 day'
         -- reprocess last 30 days to capture updates
     {% endif %}

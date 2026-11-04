@@ -1,14 +1,6 @@
 WITH raw_metrics AS (
 
-    SELECT DISTINCT
-        JSONB_ARRAY_ELEMENTS(JSONB_ARRAY_ELEMENTS(data -> 'metrics') -> 'data') ->> 'date' AS "date"
-        , SPLIT_PART(_ab_source_file_url, '/', 3) AS person
-        , JSONB_ARRAY_ELEMENTS(JSONB_ARRAY_ELEMENTS(data -> 'metrics') -> 'data') ->> 'qty' AS qty
-        , JSONB_ARRAY_ELEMENTS(JSONB_ARRAY_ELEMENTS(data -> 'metrics') -> 'data') ->> 'units' AS units
-        , JSONB_ARRAY_ELEMENTS(JSONB_ARRAY_ELEMENTS(data -> 'metrics') -> 'data') ->> 'source' AS data_source
-        , JSONB_ARRAY_ELEMENTS(data -> 'metrics') ->> 'name' AS metric_name
-    FROM
-        {{ source('health', 'metrics') }}
+    {{ latest_metric_readings('active_energy', ['qty', 'units', 'source']) }}
 
 )
 
