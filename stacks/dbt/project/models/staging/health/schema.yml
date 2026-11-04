@@ -132,6 +132,8 @@ models:
         description: "Duration of deep sleep in minutes."
       - name: awake
         description: "Duration of time awake during the sleep session in minutes."
+      - name: asleep
+        description: "Hours of sleep with no stage detail, such as AutoSleep rows or some naps."
       - name: in_bed_start
         description: "Timestamp when the person got into bed."
       - name: sleep_start
@@ -141,7 +143,7 @@ models:
       - name: sleep_end
         description: "Timestamp when sleep was detected as ending."
       - name: total_sleep
-        description: "Total sleep duration in minutes (rem + core + deep + awake)."
+        description: "Total sleep duration in hours (rem + core + deep + awake + asleep)."
         tests:
           - dbt_utils.accepted_range:
               arguments:

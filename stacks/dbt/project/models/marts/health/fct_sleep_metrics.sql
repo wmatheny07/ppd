@@ -16,6 +16,7 @@ SELECT
     , core
     , deep
     , awake
+    , asleep
     , in_bed_start
     , sleep_start
     , in_bed_end
